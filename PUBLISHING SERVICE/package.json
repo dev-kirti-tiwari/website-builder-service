@@ -1,0 +1,11 @@
+{
+  "name": "publishing-service",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test:postman": "node postman/build-collection.js && newman run postman/publishing-api.postman_collection.json -e postman/publishing-api.postman_environment.json"
+  },
+  "devDependencies": {
+    "newman": "^6.2.1"
+  }
+}

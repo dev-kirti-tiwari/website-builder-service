@@ -1,0 +1,3852 @@
+{
+  "info": {
+    "name": "TriostackOne Publishing API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "",
+          "const secret = pm.environment.get('jwt_secret');",
+          "const b64url = (w) => CryptoJS.enc.Base64.stringify(w).replace(/=+$/, '').replace(/\\+/g, '-').replace(/\\//g, '_');",
+          "const enc = (o) => b64url(CryptoJS.enc.Utf8.parse(JSON.stringify(o)));",
+          "function sign(claims, key) {",
+          "  const h = enc({ alg: 'HS256', typ: 'JWT' });",
+          "  const p = enc(claims);",
+          "  return h + '.' + p + '.' + b64url(CryptoJS.HmacSHA256(h + '.' + p, key || secret));",
+          "}",
+          "const now = Math.floor(Date.now() / 1000);",
+          "const base = { iss: 'triostackone-identity', aud: 'publishing-api', sub: '501', tenant_id: '1001', organization_id: '2001',",
+          "  permissions: ['publishing:read', 'publishing:write'], iat: now, exp: now + 3600 };",
+          "pm.variables.set('token', sign(base));",
+          "pm.variables.set('readToken', sign({ ...base, permissions: ['publishing:read'] }));",
+          "pm.variables.set('expiredToken', sign({ ...base, iat: now - 7200, exp: now - 3600 }));",
+          "pm.variables.set('wrongAudToken', sign({ ...base, aud: 'someone-else' }));",
+          "pm.variables.set('badSigToken', sign(base, 'a-completely-different-secret-0123456789'));",
+          "pm.variables.set('otherTenantToken', sign({ ...base, tenant_id: '1002', organization_id: '3001' }));",
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "pollN",
+      "value": "0"
+    }
+  ],
+  "item": [
+    {
+      "name": "0. Health",
+      "item": [
+        {
+          "name": "Health check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('status ok', () => pm.expect(pm.response.json().status).to.eql('ok'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/health"
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Authentication (JWT Bearer + scope headers)",
+      "item": [
+        {
+          "name": "Valid token -> 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('websiteId is an exact BIGINT string', () => pm.expect(pm.response.json().websiteId).to.eql('9007199254740993'));",
+                  "pm.test('State is a valid value', () => pm.expect(['published', 'unpublished']).to.include(pm.response.json().state));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/publishing-status"
+          }
+        },
+        {
+          "name": "No Authorization header -> 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Error code is UNAUTHENTICATED', () => pm.expect(pm.response.json().error.code).to.eql('UNAUTHENTICATED'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/publishing-status"
+          }
+        },
+        {
+          "name": "Malformed Authorization scheme -> 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Error code is UNAUTHENTICATED', () => pm.expect(pm.response.json().error.code).to.eql('UNAUTHENTICATED'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Basic abc123"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/publishing-status"
+          }
+        },
+        {
+          "name": "Bad signature -> 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Error code is INVALID_TOKEN', () => pm.expect(pm.response.json().error.code).to.eql('INVALID_TOKEN'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{badSigToken}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/publishing-status"
+          }
+        },
+        {
+          "name": "Expired token -> 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Error code is INVALID_TOKEN', () => pm.expect(pm.response.json().error.code).to.eql('INVALID_TOKEN'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{expiredToken}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/publishing-status"
+          }
+        },
+        {
+          "name": "Wrong audience -> 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Error code is INVALID_TOKEN', () => pm.expect(pm.response.json().error.code).to.eql('INVALID_TOKEN'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{wrongAudToken}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/publishing-status"
+          }
+        },
+        {
+          "name": "Tenant header not matching token -> 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('Error code is SCOPE_MISMATCH', () => pm.expect(pm.response.json().error.code).to.eql('SCOPE_MISMATCH'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1002"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/publishing-status"
+          }
+        },
+        {
+          "name": "Organization header not matching token -> 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('Error code is SCOPE_MISMATCH', () => pm.expect(pm.response.json().error.code).to.eql('SCOPE_MISMATCH'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2002"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/publishing-status"
+          }
+        },
+        {
+          "name": "Missing scope headers -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Error code is MISSING_SCOPE_HEADERS', () => pm.expect(pm.response.json().error.code).to.eql('MISSING_SCOPE_HEADERS'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/publishing-status"
+          }
+        },
+        {
+          "name": "Read-only token cannot publish -> 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('Error code is FORBIDDEN', () => pm.expect(pm.response.json().error.code).to.eql('FORBIDDEN'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{readToken}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "authz-check-1"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"revisionId\": \"9007199254740995\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/publish"
+          }
+        },
+        {
+          "name": "Unknown route -> 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/nope"
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Tenant / organization isolation",
+      "item": [
+        {
+          "name": "Other organization website -> 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Error code is WEBSITE_NOT_FOUND', () => pm.expect(pm.response.json().error.code).to.eql('WEBSITE_NOT_FOUND'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740998/publishing-status"
+          }
+        },
+        {
+          "name": "Other tenant website -> 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Error code is WEBSITE_NOT_FOUND', () => pm.expect(pm.response.json().error.code).to.eql('WEBSITE_NOT_FOUND'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740999/publishing-status"
+          }
+        },
+        {
+          "name": "Publish to other tenant website -> 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Error code is WEBSITE_NOT_FOUND', () => pm.expect(pm.response.json().error.code).to.eql('WEBSITE_NOT_FOUND'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "isolation-1"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"revisionId\": \"9007199254741003\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740999/publish"
+          }
+        },
+        {
+          "name": "Invalid id format -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Error code is INVALID_ID', () => pm.expect(pm.response.json().error.code).to.eql('INVALID_ID'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/websites/abc/publishing-status"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Validate and publish",
+      "item": [
+        {
+          "name": "Validate good revision -> 200 valid",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('valid', () => pm.expect(pm.response.json().valid).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"revisionId\": \"9007199254740995\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/validate-publish"
+          }
+        },
+        {
+          "name": "Validate bad revision -> 200 invalid with reasons",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('invalid', () => pm.expect(b.valid).to.be.false);",
+                  "pm.test('route conflict + missing asset reported', () => { const c = b.errors.map(e => e.code); pm.expect(c).to.include('ROUTE_CONFLICT'); pm.expect(c).to.include('ASSET_UNAVAILABLE'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"revisionId\": \"9007199254740996\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/validate-publish"
+          }
+        },
+        {
+          "name": "Publish without Idempotency-Key -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Error code is IDEMPOTENCY_KEY_REQUIRED', () => pm.expect(pm.response.json().error.code).to.eql('IDEMPOTENCY_KEY_REQUIRED'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"revisionId\": \"9007199254740995\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/publish"
+          }
+        },
+        {
+          "name": "Publish invalid revision -> 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Error code is VALIDATION_FAILED', () => pm.expect(pm.response.json().error.code).to.eql('VALIDATION_FAILED'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "publish-bad-1"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"revisionId\": \"9007199254740996\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/publish"
+          }
+        },
+        {
+          "name": "Publish revision of another website -> 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Error code is REVISION_NOT_FOUND', () => pm.expect(pm.response.json().error.code).to.eql('REVISION_NOT_FOUND'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "publish-foreign-1"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"revisionId\": \"9007199254741002\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/publish"
+          }
+        },
+        {
+          "name": "Publish valid revision -> 202 queued",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idemPublish1', pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 202', () => pm.response.to.have.status(202));",
+                  "const b = pm.response.json();",
+                  "pm.test('queued', () => pm.expect(b.status).to.eql('queued'));",
+                  "pm.test('IDs are exact decimal strings', () => { pm.expect(b.websiteId).to.eql('9007199254740993'); pm.expect(b.revisionId).to.eql('9007199254740995'); pm.expect(b.deploymentId).to.be.a('string'); });",
+                  "pm.collectionVariables.set('deploymentId', b.deploymentId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idemPublish1}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"revisionId\": \"9007199254740995\",\n  \"reason\": \"Publish updated homepage\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/publish"
+          }
+        },
+        {
+          "name": "Replay same Idempotency-Key + same body -> same deployment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 202', () => pm.response.to.have.status(202));",
+                  "pm.test('replayed', () => pm.response.to.have.header('Idempotent-Replayed', 'true'));",
+                  "pm.test('same deploymentId', () => pm.expect(pm.response.json().deploymentId).to.eql(pm.collectionVariables.get('deploymentId')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idemPublish1}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"revisionId\": \"9007199254740995\",\n  \"reason\": \"Publish updated homepage\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/publish"
+          }
+        },
+        {
+          "name": "Same Idempotency-Key + different body -> 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Error code is IDEMPOTENCY_KEY_REUSED', () => pm.expect(pm.response.json().error.code).to.eql('IDEMPOTENCY_KEY_REUSED'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idemPublish1}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"revisionId\": \"9007199254741001\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/publish"
+          }
+        },
+        {
+          "name": "Poll deployment until finished (publish 1)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (Number(pm.collectionVariables.get('pollN') || 0) > 0) { setTimeout(() => {}, 400); }"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "const terminal = ['succeeded', 'failed'].includes(d.status);",
+                  "const n = Number(pm.collectionVariables.get('pollN') || 0);",
+                  "if (!terminal && n < 40) { pm.collectionVariables.set('pollN', n + 1); postman.setNextRequest(pm.info.requestName); }",
+                  "else {",
+                  "  pm.collectionVariables.set('pollN', 0);",
+                  "  pm.test('Deployment reached succeeded', () => pm.expect(d.status).to.eql('succeeded'));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/deployments/{{deploymentId}}"
+          }
+        },
+        {
+          "name": "Deployment logs -> 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('has stage events', () => { const s = pm.response.json().events.map(e => e.stage); pm.expect(s).to.include.members(['validating', 'deploying', 'activating', 'succeeded']); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/deployments/{{deploymentId}}/logs"
+          }
+        },
+        {
+          "name": "Publishing status -> published",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('published', () => pm.expect(b.state).to.eql('published'));",
+                  "pm.test('active release present', () => pm.expect(b.activeRelease.status).to.eql('active'));",
+                  "pm.collectionVariables.set('release1', b.activeRelease.releaseId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/publishing-status"
+          }
+        },
+        {
+          "name": "List deployments -> 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('has items', () => pm.expect(pm.response.json().items.length).to.be.above(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/deployments"
+          }
+        },
+        {
+          "name": "List releases -> 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const items = pm.response.json().items;",
+                  "pm.test('Active release listed', () => pm.expect(items.some(r => r.status === 'active')).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/releases"
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Second release and rollback",
+      "item": [
+        {
+          "name": "Publish second revision -> 202",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idemPublish2', pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 202', () => pm.response.to.have.status(202));",
+                  "pm.collectionVariables.set('deploymentId', pm.response.json().deploymentId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idemPublish2}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"revisionId\": \"9007199254741001\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/publish"
+          }
+        },
+        {
+          "name": "Poll deployment until finished (publish 2)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (Number(pm.collectionVariables.get('pollN') || 0) > 0) { setTimeout(() => {}, 400); }"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "const terminal = ['succeeded', 'failed'].includes(d.status);",
+                  "const n = Number(pm.collectionVariables.get('pollN') || 0);",
+                  "if (!terminal && n < 40) { pm.collectionVariables.set('pollN', n + 1); postman.setNextRequest(pm.info.requestName); }",
+                  "else {",
+                  "  pm.collectionVariables.set('pollN', 0);",
+                  "  pm.test('Deployment reached succeeded', () => pm.expect(d.status).to.eql('succeeded'));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/deployments/{{deploymentId}}"
+          }
+        },
+        {
+          "name": "Status shows new active release",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const a = pm.response.json().activeRelease;",
+                  "pm.test('release changed', () => pm.expect(a.releaseId).to.not.eql(pm.collectionVariables.get('release1')));",
+                  "pm.test('revision is the second one', () => pm.expect(a.revisionId).to.eql('9007199254741001'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/publishing-status"
+          }
+        },
+        {
+          "name": "Rollback to previous release -> 200",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idemRollback', pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('rollback succeeded', () => { pm.expect(b.kind).to.eql('rollback'); pm.expect(b.status).to.eql('succeeded'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idemRollback}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"releaseId\": \"{{release1}}\",\n  \"reason\": \"Revert\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/rollback"
+          }
+        },
+        {
+          "name": "Status shows rolled-back release active",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('release1 active again', () => pm.expect(pm.response.json().activeRelease.releaseId).to.eql(pm.collectionVariables.get('release1')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/publishing-status"
+          }
+        },
+        {
+          "name": "Rollback to already-active release -> 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Error code is ALREADY_ACTIVE', () => pm.expect(pm.response.json().error.code).to.eql('ALREADY_ACTIVE'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "rollback-active-1"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"releaseId\": \"{{release1}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/rollback"
+          }
+        },
+        {
+          "name": "Rollback to unknown release -> 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Error code is RELEASE_NOT_FOUND', () => pm.expect(pm.response.json().error.code).to.eql('RELEASE_NOT_FOUND'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "rollback-unknown-1"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"releaseId\": \"9007199254749999\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/rollback"
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Failure isolation and retry",
+      "item": [
+        {
+          "name": "Publish revision that fails at deploy -> 202",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idemFail', pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 202', () => pm.response.to.have.status(202));",
+                  "pm.collectionVariables.set('deploymentId', pm.response.json().deploymentId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idemFail}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"revisionId\": \"9007199254740997\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/publish"
+          }
+        },
+        {
+          "name": "Poll deployment until finished (expected failure)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (Number(pm.collectionVariables.get('pollN') || 0) > 0) { setTimeout(() => {}, 400); }"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "const terminal = ['succeeded', 'failed'].includes(d.status);",
+                  "const n = Number(pm.collectionVariables.get('pollN') || 0);",
+                  "if (!terminal && n < 40) { pm.collectionVariables.set('pollN', n + 1); postman.setNextRequest(pm.info.requestName); }",
+                  "else {",
+                  "  pm.collectionVariables.set('pollN', 0);",
+                  "  pm.test('Deployment reached failed', () => pm.expect(d.status).to.eql('failed'));",
+                  "  pm.test('error code recorded', () => pm.expect(d.errorCode).to.eql('PROVIDER_DEPLOY_FAILED'));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/deployments/{{deploymentId}}"
+          }
+        },
+        {
+          "name": "Previous live release preserved after failure",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('still published', () => pm.expect(b.state).to.eql('published'));",
+                  "pm.test('same active release', () => pm.expect(b.activeRelease.releaseId).to.eql(pm.collectionVariables.get('release1')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/publishing-status"
+          }
+        },
+        {
+          "name": "Retry failed deployment -> 202",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idemRetry', pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 202', () => pm.response.to.have.status(202));",
+                  "pm.test('queued again', () => pm.expect(pm.response.json().status).to.eql('queued'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idemRetry}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/deployments/{{deploymentId}}/retry"
+          }
+        },
+        {
+          "name": "Poll deployment until finished (retry)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (Number(pm.collectionVariables.get('pollN') || 0) > 0) { setTimeout(() => {}, 400); }"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "const terminal = ['succeeded', 'failed'].includes(d.status);",
+                  "const n = Number(pm.collectionVariables.get('pollN') || 0);",
+                  "if (!terminal && n < 40) { pm.collectionVariables.set('pollN', n + 1); postman.setNextRequest(pm.info.requestName); }",
+                  "else {",
+                  "  pm.collectionVariables.set('pollN', 0);",
+                  "  pm.test('Deployment reached succeeded', () => pm.expect(d.status).to.eql('succeeded'));",
+                  "  pm.test('two attempts recorded', () => pm.expect(d.attempts.length).to.eql(2));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/deployments/{{deploymentId}}"
+          }
+        },
+        {
+          "name": "Retry a succeeded deployment -> 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Error code is NOT_RETRYABLE', () => pm.expect(pm.response.json().error.code).to.eql('NOT_RETRYABLE'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "retry-succeeded-1"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/deployments/{{deploymentId}}/retry"
+          }
+        },
+        {
+          "name": "Publish revision that fails at propagation -> 202",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idemProp', pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 202', () => pm.response.to.have.status(202));",
+                  "pm.collectionVariables.set('deploymentId', pm.response.json().deploymentId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idemProp}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"revisionId\": \"9007199254741004\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/publish"
+          }
+        },
+        {
+          "name": "Poll deployment until finished (propagation failure)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (Number(pm.collectionVariables.get('pollN') || 0) > 0) { setTimeout(() => {}, 400); }"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "const terminal = ['succeeded', 'failed'].includes(d.status);",
+                  "const n = Number(pm.collectionVariables.get('pollN') || 0);",
+                  "if (!terminal && n < 40) { pm.collectionVariables.set('pollN', n + 1); postman.setNextRequest(pm.info.requestName); }",
+                  "else {",
+                  "  pm.collectionVariables.set('pollN', 0);",
+                  "  pm.test('Deployment reached failed', () => pm.expect(d.status).to.eql('failed'));",
+                  "  pm.test('propagation failure reported accurately', () => { pm.expect(d.errorCode).to.eql('PROVIDER_PROPAGATE_FAILED'); pm.expect(d.propagationStatus).to.eql('failed'); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/deployments/{{deploymentId}}"
+          }
+        },
+        {
+          "name": "Release stays live after propagation failure (partial state)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('new release is the live one', () => pm.expect(pm.response.json().activeRelease.revisionId).to.eql('9007199254741004'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/publishing-status"
+          }
+        },
+        {
+          "name": "Retry recovers propagation only -> 202",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idemRetryProp', pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 202', () => pm.response.to.have.status(202));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idemRetryProp}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/deployments/{{deploymentId}}/retry"
+          }
+        },
+        {
+          "name": "Poll deployment until finished (propagation recovered)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (Number(pm.collectionVariables.get('pollN') || 0) > 0) { setTimeout(() => {}, 400); }"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "const terminal = ['succeeded', 'failed'].includes(d.status);",
+                  "const n = Number(pm.collectionVariables.get('pollN') || 0);",
+                  "if (!terminal && n < 40) { pm.collectionVariables.set('pollN', n + 1); postman.setNextRequest(pm.info.requestName); }",
+                  "else {",
+                  "  pm.collectionVariables.set('pollN', 0);",
+                  "  pm.test('Deployment reached succeeded', () => pm.expect(d.status).to.eql('succeeded'));",
+                  "  pm.test('propagation completed, 2 attempts', () => { pm.expect(d.propagationStatus).to.eql('completed'); pm.expect(d.attempts.length).to.eql(2); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/deployments/{{deploymentId}}"
+          }
+        },
+        {
+          "name": "Other tenant cannot read deployment -> 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Error code is DEPLOYMENT_NOT_FOUND', () => pm.expect(pm.response.json().error.code).to.eql('DEPLOYMENT_NOT_FOUND'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{otherTenantToken}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1002"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "3001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/deployments/{{deploymentId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Unpublish",
+      "item": [
+        {
+          "name": "Unpublish -> 200",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idemUnpublish', pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('unpublish succeeded', () => { const b = pm.response.json(); pm.expect(b.kind).to.eql('unpublish'); pm.expect(b.status).to.eql('succeeded'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idemUnpublish}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Take down\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/unpublish"
+          }
+        },
+        {
+          "name": "Status shows unpublished, history kept",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('unpublished with no active release', () => { const b = pm.response.json(); pm.expect(b.state).to.eql('unpublished'); pm.expect(b.activeRelease).to.eql(null); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/publishing-status"
+          }
+        },
+        {
+          "name": "Unpublish again -> 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Error code is NOT_PUBLISHED', () => pm.expect(pm.response.json().error.code).to.eql('NOT_PUBLISHED'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "unpublish-again-1"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/unpublish"
+          }
+        },
+        {
+          "name": "Release history preserved",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('3 releases kept', () => pm.expect(pm.response.json().items.length).to.be.at.least(3));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/releases"
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Preview sessions",
+      "item": [
+        {
+          "name": "Create preview session -> 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('active with one-time token', () => { pm.expect(b.status).to.eql('active'); pm.expect(b.token).to.be.a('string').with.length.above(20); });",
+                  "pm.collectionVariables.set('sessionId', b.sessionId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"revisionId\": \"9007199254741001\",\n  \"ttlSeconds\": 600\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/preview-sessions"
+          }
+        },
+        {
+          "name": "Create preview with unknown revision -> 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Error code is REVISION_NOT_FOUND', () => pm.expect(pm.response.json().error.code).to.eql('REVISION_NOT_FOUND'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"revisionId\": \"9007199254741002\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/preview-sessions"
+          }
+        },
+        {
+          "name": "Create preview with invalid ttl -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Error code is INVALID_TTL', () => pm.expect(pm.response.json().error.code).to.eql('INVALID_TTL'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"revisionId\": \"9007199254741001\",\n  \"ttlSeconds\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/preview-sessions"
+          }
+        },
+        {
+          "name": "Get preview session -> 200 (token never returned)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('active, no token', () => { const b = pm.response.json(); pm.expect(b.status).to.eql('active'); pm.expect(b).to.not.have.property('token'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/preview-sessions/{{sessionId}}"
+          }
+        },
+        {
+          "name": "Other tenant cannot see preview -> 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{otherTenantToken}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1002"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "3001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/preview-sessions/{{sessionId}}"
+          }
+        },
+        {
+          "name": "Revoke preview session -> 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('revoked', () => pm.expect(pm.response.json().status).to.eql('revoked'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/preview-sessions/{{sessionId}}"
+          }
+        },
+        {
+          "name": "Get revoked preview -> 200 revoked",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('revoked', () => pm.expect(pm.response.json().status).to.eql('revoked'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/preview-sessions/{{sessionId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Input validation, permissions and pagination",
+      "item": [
+        {
+          "name": "Malformed JSON body -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Error code is MALFORMED_JSON', () => pm.expect(pm.response.json().error.code).to.eql('MALFORMED_JSON'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ not json"
+            },
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/validate-publish"
+          }
+        },
+        {
+          "name": "Publish without revisionId -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Error code is INVALID_ID', () => pm.expect(pm.response.json().error.code).to.eql('INVALID_ID'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "val-norev-1"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/publish"
+          }
+        },
+        {
+          "name": "Publish with numeric revisionId (precision-unsafe) -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Error code is INVALID_ID', () => pm.expect(pm.response.json().error.code).to.eql('INVALID_ID'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "val-numrev-1"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"revisionId\": 98765\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/publish"
+          }
+        },
+        {
+          "name": "Publish with oversized reason -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Error code is INVALID_REASON', () => pm.expect(pm.response.json().error.code).to.eql('INVALID_REASON'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "val-reason-1"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"revisionId\": \"9007199254740995\",\n  \"reason\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/publish"
+          }
+        },
+        {
+          "name": "Rollback with invalid releaseId -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Error code is INVALID_ID', () => pm.expect(pm.response.json().error.code).to.eql('INVALID_ID'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "val-rb-1"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"releaseId\": \"abc\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/rollback"
+          }
+        },
+        {
+          "name": "Read-only token can read status -> 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{readToken}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/publishing-status"
+          }
+        },
+        {
+          "name": "Read-only token cannot rollback -> 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('Error code is FORBIDDEN', () => pm.expect(pm.response.json().error.code).to.eql('FORBIDDEN'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{readToken}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "ro-rb-1"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"releaseId\": \"1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/rollback"
+          }
+        },
+        {
+          "name": "Read-only token cannot unpublish -> 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('Error code is FORBIDDEN', () => pm.expect(pm.response.json().error.code).to.eql('FORBIDDEN'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{readToken}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "ro-un-1"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/unpublish"
+          }
+        },
+        {
+          "name": "Read-only token cannot create preview -> 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('Error code is FORBIDDEN', () => pm.expect(pm.response.json().error.code).to.eql('FORBIDDEN'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{readToken}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"revisionId\": \"9007199254740995\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/preview-sessions"
+          }
+        },
+        {
+          "name": "Read-only token cannot retry -> 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('Error code is FORBIDDEN', () => pm.expect(pm.response.json().error.code).to.eql('FORBIDDEN'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{readToken}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "ro-retry-1"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/deployments/{{deploymentId}}/retry"
+          }
+        },
+        {
+          "name": "Other tenant cannot revoke preview -> 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{otherTenantToken}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1002"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "3001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/preview-sessions/{{sessionId}}"
+          }
+        },
+        {
+          "name": "Other tenant cannot list deployments -> 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{otherTenantToken}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1002"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "3001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/deployments"
+          }
+        },
+        {
+          "name": "Other org cannot rollback -> 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "org-rb-1"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"releaseId\": \"1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740998/rollback"
+          }
+        },
+        {
+          "name": "Unknown deployment -> 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Error code is DEPLOYMENT_NOT_FOUND', () => pm.expect(pm.response.json().error.code).to.eql('DEPLOYMENT_NOT_FOUND'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/deployments/9007199254749998"
+          }
+        },
+        {
+          "name": "Pagination limit=1 -> 1 item",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('one item, limit echoed', () => { const b = pm.response.json(); pm.expect(b.items.length).to.eql(1); pm.expect(b.limit).to.eql(1); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/deployments?limit=1&offset=0"
+          }
+        },
+        {
+          "name": "Pagination clamps limit to 100",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('limit clamped', () => pm.expect(pm.response.json().limit).to.eql(100));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/websites/9007199254740993/releases?limit=5000"
+          }
+        },
+        {
+          "name": "Error responses echo the request id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('request id echoed', () => { pm.expect(pm.response.headers.get('X-Request-Id')).to.eql('corr-123'); pm.expect(pm.response.json().meta.requestId).to.eql('corr-123'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "1001"
+              },
+              {
+                "key": "X-Organization-Id",
+                "value": "2001"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "corr-123"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/nope"
+          }
+        }
+      ]
+    }
+  ]
+}

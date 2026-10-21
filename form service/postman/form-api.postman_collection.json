@@ -1,0 +1,2479 @@
+{
+  "info": {
+    "name": "Form API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Happy-path run of every Form API endpoint. Headers (Bearer JWT, X-Tenant-Id, X-Organization-Id, X-User-Id, X-Software-Id, X-Request-Id) are assigned automatically by the collection pre-request script. Every request must return 200."
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Assigns Authorization + trusted-context headers on every protected request.",
+          "// Negative tests set an \"X-Test-Mode\" header (removed before sending) to tamper with the identity.",
+          "const path = pm.request.url.getPath();",
+          "const mode = pm.request.headers.get('X-Test-Mode');",
+          "pm.request.headers.remove('X-Test-Mode');",
+          "const isProtected = path.indexOf('/api/v1/') === 0 && path.indexOf('/api/v1/public/') !== 0 && path !== '/api/v1/openapi.json';",
+          "if (isProtected && mode !== 'none') {",
+          "  const b64url = (w) => CryptoJS.enc.Base64.stringify(w).replace(/=+$/, '').replace(/\\+/g, '-').replace(/\\//g, '_');",
+          "  const enc = (o) => b64url(CryptoJS.enc.Utf8.parse(JSON.stringify(o)));",
+          "  const now = Math.floor(Date.now() / 1000);",
+          "  const v = (k) => pm.variables.get(k);",
+          "  const payload = { sub: v('userId'), tenant_id: v('tenantId'), organization_id: v('organizationId'),",
+          "    roles: v('roles').split(','), iss: v('jwtIssuer'), aud: v('jwtAudience'), iat: now, exp: now + 300 };",
+          "  let secret = v('jwtSecret');",
+          "  if (mode === 'viewer') payload.roles = ['form_viewer'];",
+          "  if (mode === 'editor') payload.roles = ['form_editor'];",
+          "  if (mode === 'other-tenant') { payload.tenant_id = '2'; payload.sub = '200'; }",
+          "  if (mode === 'other-org') { payload.organization_id = '11'; payload.sub = '300'; }",
+          "  if (mode === 'expired') payload.exp = now - 60;",
+          "  if (mode === 'wrong-audience') payload.aud = 'some-other-service';",
+          "  if (mode === 'bad-signature') secret = 'x'.repeat(40);",
+          "  const unsigned = enc({ alg: 'HS256', typ: 'JWT' }) + '.' + enc(payload);",
+          "  let token = unsigned + '.' + b64url(CryptoJS.HmacSHA256(unsigned, secret));",
+          "  if (mode === 'garbage') token = 'not.a.jwt';",
+          "  const set = (k, val) => pm.request.headers.upsert({ key: k, value: String(val) });",
+          "  set('Authorization', 'Bearer ' + token);",
+          "  set('X-Tenant-Id', payload.tenant_id);",
+          "  set('X-Organization-Id', payload.organization_id);",
+          "  set('X-User-Id', payload.sub);",
+          "  set('X-Software-Id', v('softwareId'));",
+          "  if (mode === 'spoof-tenant') set('X-Tenant-Id', '2');",
+          "}",
+          "if (mode === 'oversized') {",
+          "  pm.request.body.update(JSON.stringify({ data: { name: 'x'.repeat(200000) } }));",
+          "}",
+          "pm.request.headers.upsert({ key: 'X-Request-Id', value: 'pm-' + pm.variables.replaceIn('{{$guid}}') });"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "formId",
+      "value": ""
+    },
+    {
+      "key": "formSlug",
+      "value": ""
+    },
+    {
+      "key": "idemId",
+      "value": ""
+    },
+    {
+      "key": "idemSuffix",
+      "value": ""
+    },
+    {
+      "key": "revision",
+      "value": ""
+    },
+    {
+      "key": "emailFieldId",
+      "value": ""
+    },
+    {
+      "key": "messageFieldId",
+      "value": ""
+    },
+    {
+      "key": "submissionId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "0. Platform",
+      "item": [
+        {
+          "name": "Health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "pm.test('status ok', function () { pm.expect(pm.response.json().status).to.eql('ok'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Readiness (database)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "pm.test('ready', function () { pm.expect(pm.response.json().status).to.eql('ready'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ready"
+              ]
+            }
+          }
+        },
+        {
+          "name": "OpenAPI 3.1 document",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "pm.test('openapi 3.1', function () { pm.expect(pm.response.json().openapi).to.eql('3.1.0'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/openapi.json",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "openapi.json"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Forms",
+      "item": [
+        {
+          "name": "Create form",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('success envelope', function () { pm.expect(json.success).to.eql(true); pm.expect(json.meta.requestId).to.be.a('string'); });",
+                  "pm.test('createdBy is the token subject', function () { pm.expect(json.data.createdBy).to.eql(pm.variables.get('userId')); });",
+                  "pm.collectionVariables.set('formId', String(json.data.id));",
+                  "pm.collectionVariables.set('formSlug', String(json.data.slug));",
+                  "pm.collectionVariables.set('revision', String(json.data.revision));",
+                  "pm.collectionVariables.set('idemSuffix', String(Date.now()));",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/websites/{{websiteId}}/forms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "websites",
+                "{{websiteId}}",
+                "forms"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Contact {{$timestamp}}\",\n  \"description\": \"Created from Postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List forms",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('success envelope', function () { pm.expect(json.success).to.eql(true); pm.expect(json.meta.requestId).to.be.a('string'); });",
+                  "pm.test('has items', function () { pm.expect(json.data.items.length).to.be.above(0); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/websites/{{websiteId}}/forms?page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "websites",
+                "{{websiteId}}",
+                "forms?page=1&limit=20"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get form",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('success envelope', function () { pm.expect(json.success).to.eql(true); pm.expect(json.meta.requestId).to.be.a('string'); });",
+                  "pm.test('id matches', function () { pm.expect(json.data.id).to.eql(pm.collectionVariables.get('formId')); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forms/{{formId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forms",
+                "{{formId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update form",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('success envelope', function () { pm.expect(json.success).to.eql(true); pm.expect(json.meta.requestId).to.be.a('string'); });",
+                  "pm.collectionVariables.set('revision', String(json.data.revision));",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forms/{{formId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forms",
+                "{{formId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Updated from Postman\",\n  \"revision\": {{revision}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Fields",
+      "item": [
+        {
+          "name": "Create field: email",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('success envelope', function () { pm.expect(json.success).to.eql(true); pm.expect(json.meta.requestId).to.be.a('string'); });",
+                  "pm.collectionVariables.set('emailFieldId', String(json.data.id));",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forms/{{formId}}/fields",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forms",
+                "{{formId}}",
+                "fields"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"email\",\n  \"label\": \"Email\",\n  \"type\": \"email\",\n  \"required\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Create field: message",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('success envelope', function () { pm.expect(json.success).to.eql(true); pm.expect(json.meta.requestId).to.be.a('string'); });",
+                  "pm.collectionVariables.set('messageFieldId', String(json.data.id));",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forms/{{formId}}/fields",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forms",
+                "{{formId}}",
+                "fields"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"message\",\n  \"label\": \"Message\",\n  \"type\": \"textarea\",\n  \"validation\": {\n    \"maxLength\": 500\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Update field: message",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('success envelope', function () { pm.expect(json.success).to.eql(true); pm.expect(json.meta.requestId).to.be.a('string'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forms/{{formId}}/fields/{{messageFieldId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forms",
+                "{{formId}}",
+                "fields",
+                "{{messageFieldId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Your message\",\n  \"required\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Automations",
+      "item": [
+        {
+          "name": "Create automation (email)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('success envelope', function () { pm.expect(json.success).to.eql(true); pm.expect(json.meta.requestId).to.be.a('string'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forms/{{formId}}/automations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forms",
+                "{{formId}}",
+                "automations"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actionType\": \"email\",\n  \"config\": {\n    \"templateKey\": \"thank-you\",\n    \"recipientField\": \"email\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List automations",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('success envelope', function () { pm.expect(json.success).to.eql(true); pm.expect(json.meta.requestId).to.be.a('string'); });",
+                  "pm.test('one automation', function () { pm.expect(json.data.length).to.be.above(0); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forms/{{formId}}/automations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forms",
+                "{{formId}}",
+                "automations"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Publish",
+      "item": [
+        {
+          "name": "Publish form",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('success envelope', function () { pm.expect(json.success).to.eql(true); pm.expect(json.meta.requestId).to.be.a('string'); });",
+                  "pm.test('version number', function () { pm.expect(json.data.versionNumber).to.be.a('number'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forms/{{formId}}/publish",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forms",
+                "{{formId}}",
+                "publish"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Public submission (no credentials)",
+      "item": [
+        {
+          "name": "Submit to published form",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('success envelope', function () { pm.expect(json.success).to.eql(true); pm.expect(json.meta.requestId).to.be.a('string'); });",
+                  "pm.collectionVariables.set('submissionId', String(json.data.submissionId));",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/public/forms/{{formId}}/submissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "public",
+                "forms",
+                "{{formId}}",
+                "submissions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"data\": {\n    \"email\": \"visitor@example.com\",\n    \"message\": \"Hello from Postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Submissions",
+      "item": [
+        {
+          "name": "List submissions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('success envelope', function () { pm.expect(json.success).to.eql(true); pm.expect(json.meta.requestId).to.be.a('string'); });",
+                  "pm.test('has the submission', function () { pm.expect(json.data.items.length).to.be.above(0); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forms/{{formId}}/submissions?page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forms",
+                "{{formId}}",
+                "submissions?page=1&limit=20"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get submission",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('success envelope', function () { pm.expect(json.success).to.eql(true); pm.expect(json.meta.requestId).to.be.a('string'); });",
+                  "pm.test('anonymous visitor', function () { pm.expect(json.data.actorType).to.eql('ANONYMOUS_VISITOR'); pm.expect(json.data.userId).to.eql(null); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forms/{{formId}}/submissions/{{submissionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forms",
+                "{{formId}}",
+                "submissions",
+                "{{submissionId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update submission",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('success envelope', function () { pm.expect(json.success).to.eql(true); pm.expect(json.meta.requestId).to.be.a('string'); });",
+                  "pm.test('status read', function () { pm.expect(json.data.status).to.eql('read'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forms/{{formId}}/submissions/{{submissionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forms",
+                "{{formId}}",
+                "submissions",
+                "{{submissionId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"read\",\n  \"metadata\": {\n    \"note\": \"reviewed in Postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Negative & security cases",
+      "item": [
+        {
+          "name": "401 no Authorization header",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401', function () { pm.response.to.have.status(401); });",
+                  "pm.test('error code UNAUTHENTICATED', function () { pm.expect(pm.response.json().error.code).to.eql('UNAUTHENTICATED'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Test-Mode",
+                "value": "none"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/websites/{{websiteId}}/forms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "websites",
+                "{{websiteId}}",
+                "forms"
+              ]
+            }
+          }
+        },
+        {
+          "name": "401 garbage token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401', function () { pm.response.to.have.status(401); });",
+                  "pm.test('error code UNAUTHENTICATED', function () { pm.expect(pm.response.json().error.code).to.eql('UNAUTHENTICATED'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Test-Mode",
+                "value": "garbage"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/websites/{{websiteId}}/forms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "websites",
+                "{{websiteId}}",
+                "forms"
+              ]
+            }
+          }
+        },
+        {
+          "name": "401 expired token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401', function () { pm.response.to.have.status(401); });",
+                  "pm.test('error code UNAUTHENTICATED', function () { pm.expect(pm.response.json().error.code).to.eql('UNAUTHENTICATED'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Test-Mode",
+                "value": "expired"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/websites/{{websiteId}}/forms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "websites",
+                "{{websiteId}}",
+                "forms"
+              ]
+            }
+          }
+        },
+        {
+          "name": "401 wrong audience",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401', function () { pm.response.to.have.status(401); });",
+                  "pm.test('error code UNAUTHENTICATED', function () { pm.expect(pm.response.json().error.code).to.eql('UNAUTHENTICATED'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Test-Mode",
+                "value": "wrong-audience"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/websites/{{websiteId}}/forms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "websites",
+                "{{websiteId}}",
+                "forms"
+              ]
+            }
+          }
+        },
+        {
+          "name": "401 bad signature",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401', function () { pm.response.to.have.status(401); });",
+                  "pm.test('error code UNAUTHENTICATED', function () { pm.expect(pm.response.json().error.code).to.eql('UNAUTHENTICATED'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Test-Mode",
+                "value": "bad-signature"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/websites/{{websiteId}}/forms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "websites",
+                "{{websiteId}}",
+                "forms"
+              ]
+            }
+          }
+        },
+        {
+          "name": "403 spoofed X-Tenant-Id header",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', function () { pm.response.to.have.status(403); });",
+                  "pm.test('error code CONTEXT_MISMATCH', function () { pm.expect(pm.response.json().error.code).to.eql('CONTEXT_MISMATCH'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Test-Mode",
+                "value": "spoof-tenant"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/websites/{{websiteId}}/forms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "websites",
+                "{{websiteId}}",
+                "forms"
+              ]
+            }
+          }
+        },
+        {
+          "name": "403 viewer cannot create form",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', function () { pm.response.to.have.status(403); });",
+                  "pm.test('error code FORBIDDEN', function () { pm.expect(pm.response.json().error.code).to.eql('FORBIDDEN'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Test-Mode",
+                "value": "viewer"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/websites/{{websiteId}}/forms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "websites",
+                "{{websiteId}}",
+                "forms"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"x\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "403 editor cannot publish",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', function () { pm.response.to.have.status(403); });",
+                  "pm.test('error code FORBIDDEN', function () { pm.expect(pm.response.json().error.code).to.eql('FORBIDDEN'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Test-Mode",
+                "value": "editor"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forms/{{formId}}/publish",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forms",
+                "{{formId}}",
+                "publish"
+              ]
+            }
+          }
+        },
+        {
+          "name": "403 editor cannot delete",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', function () { pm.response.to.have.status(403); });",
+                  "pm.test('error code FORBIDDEN', function () { pm.expect(pm.response.json().error.code).to.eql('FORBIDDEN'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Test-Mode",
+                "value": "editor"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forms/{{formId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forms",
+                "{{formId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "404 other tenant cannot read form",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 404', function () { pm.response.to.have.status(404); });",
+                  "pm.test('error code NOT_FOUND', function () { pm.expect(pm.response.json().error.code).to.eql('NOT_FOUND'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Test-Mode",
+                "value": "other-tenant"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forms/{{formId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forms",
+                "{{formId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "404 other organization cannot update form",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 404', function () { pm.response.to.have.status(404); });",
+                  "pm.test('error code NOT_FOUND', function () { pm.expect(pm.response.json().error.code).to.eql('NOT_FOUND'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Test-Mode",
+                "value": "other-org"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forms/{{formId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forms",
+                "{{formId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"hacked\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "404 other tenant cannot read submissions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 404', function () { pm.response.to.have.status(404); });",
+                  "pm.test('error code NOT_FOUND', function () { pm.expect(pm.response.json().error.code).to.eql('NOT_FOUND'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Test-Mode",
+                "value": "other-tenant"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forms/{{formId}}/submissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forms",
+                "{{formId}}",
+                "submissions"
+              ]
+            }
+          }
+        },
+        {
+          "name": "404 other tenant cannot publish",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 404', function () { pm.response.to.have.status(404); });",
+                  "pm.test('error code NOT_FOUND', function () { pm.expect(pm.response.json().error.code).to.eql('NOT_FOUND'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Test-Mode",
+                "value": "other-tenant"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forms/{{formId}}/publish",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forms",
+                "{{formId}}",
+                "publish"
+              ]
+            }
+          }
+        },
+        {
+          "name": "200 other tenant list is empty (isolation)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('sees none of tenant 1', function () { pm.expect(pm.response.json().data.pagination.total).to.eql(0); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Test-Mode",
+                "value": "other-tenant"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/websites/{{websiteId}}/forms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "websites",
+                "{{websiteId}}",
+                "forms"
+              ]
+            }
+          }
+        },
+        {
+          "name": "400 create form with empty body",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('error code VALIDATION_ERROR', function () { pm.expect(pm.response.json().error.code).to.eql('VALIDATION_ERROR'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/websites/{{websiteId}}/forms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "websites",
+                "{{websiteId}}",
+                "forms"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "400 create form with client-supplied tenant_id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('error code VALIDATION_ERROR', function () { pm.expect(pm.response.json().error.code).to.eql('VALIDATION_ERROR'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/websites/{{websiteId}}/forms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "websites",
+                "{{websiteId}}",
+                "forms"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"x\", \"tenant_id\": \"2\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "400 invalid form id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('error code INVALID_ID', function () { pm.expect(pm.response.json().error.code).to.eql('INVALID_ID'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forms/abc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forms",
+                "abc"
+              ]
+            }
+          }
+        },
+        {
+          "name": "400 malformed JSON",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('error code INVALID_JSON', function () { pm.expect(pm.response.json().error.code).to.eql('INVALID_JSON'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/websites/{{websiteId}}/forms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "websites",
+                "{{websiteId}}",
+                "forms"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{bad",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "400 field name not snake_case",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('error code VALIDATION_ERROR', function () { pm.expect(pm.response.json().error.code).to.eql('VALIDATION_ERROR'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forms/{{formId}}/fields",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forms",
+                "{{formId}}",
+                "fields"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"Bad Name\", \"label\": \"x\", \"type\": \"text\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "400 select field without options",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('error code VALIDATION_ERROR', function () { pm.expect(pm.response.json().error.code).to.eql('VALIDATION_ERROR'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forms/{{formId}}/fields",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forms",
+                "{{formId}}",
+                "fields"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"pick\", \"label\": \"x\", \"type\": \"select\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "400 automation with URL destination",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('error code VALIDATION_ERROR', function () { pm.expect(pm.response.json().error.code).to.eql('VALIDATION_ERROR'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forms/{{formId}}/automations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forms",
+                "{{formId}}",
+                "automations"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"actionType\": \"webhook\", \"config\": {\"url\": \"http://evil.example\"}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "400 automation referencing unknown field",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('error code VALIDATION_ERROR', function () { pm.expect(pm.response.json().error.code).to.eql('VALIDATION_ERROR'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forms/{{formId}}/automations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forms",
+                "{{formId}}",
+                "automations"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"actionType\": \"email\", \"config\": {\"templateKey\": \"t\", \"recipientField\": \"nope\"}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "409 duplicate slug",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 409', function () { pm.response.to.have.status(409); });",
+                  "pm.test('error code SLUG_CONFLICT', function () { pm.expect(pm.response.json().error.code).to.eql('SLUG_CONFLICT'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/websites/{{websiteId}}/forms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "websites",
+                "{{websiteId}}",
+                "forms"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"Dup\", \"slug\": \"{{formSlug}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "409 duplicate field name",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 409', function () { pm.response.to.have.status(409); });",
+                  "pm.test('error code FIELD_CONFLICT', function () { pm.expect(pm.response.json().error.code).to.eql('FIELD_CONFLICT'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forms/{{formId}}/fields",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forms",
+                "{{formId}}",
+                "fields"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"email\", \"label\": \"Email\", \"type\": \"email\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "409 stale revision",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 409', function () { pm.response.to.have.status(409); });",
+                  "pm.test('error code REVISION_CONFLICT', function () { pm.expect(pm.response.json().error.code).to.eql('REVISION_CONFLICT'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forms/{{formId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forms",
+                "{{formId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"Stale\", \"revision\": 1}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "404 unknown route",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 404', function () { pm.response.to.have.status(404); });",
+                  "pm.test('error code ROUTE_NOT_FOUND', function () { pm.expect(pm.response.json().error.code).to.eql('ROUTE_NOT_FOUND'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/does-not-exist",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "does-not-exist"
+              ]
+            }
+          }
+        },
+        {
+          "name": "404 public submit to unknown form",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 404', function () { pm.response.to.have.status(404); });",
+                  "pm.test('error code NOT_FOUND', function () { pm.expect(pm.response.json().error.code).to.eql('NOT_FOUND'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Test-Mode",
+                "value": "none"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/public/forms/999999/submissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "public",
+                "forms",
+                "999999",
+                "submissions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"data\": {\"email\": \"v@example.com\", \"message\": \"hi\"}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "400 public unknown field",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('error code VALIDATION_ERROR', function () { pm.expect(pm.response.json().error.code).to.eql('VALIDATION_ERROR'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Test-Mode",
+                "value": "none"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/public/forms/{{formId}}/submissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "public",
+                "forms",
+                "{{formId}}",
+                "submissions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"data\": {\"email\": \"v@example.com\", \"message\": \"hi\", \"admin\": true}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "400 public missing required field",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('error code VALIDATION_ERROR', function () { pm.expect(pm.response.json().error.code).to.eql('VALIDATION_ERROR'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Test-Mode",
+                "value": "none"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/public/forms/{{formId}}/submissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "public",
+                "forms",
+                "{{formId}}",
+                "submissions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"data\": {\"message\": \"hi\"}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "400 public invalid email",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('error code VALIDATION_ERROR', function () { pm.expect(pm.response.json().error.code).to.eql('VALIDATION_ERROR'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Test-Mode",
+                "value": "none"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/public/forms/{{formId}}/submissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "public",
+                "forms",
+                "{{formId}}",
+                "submissions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"data\": {\"email\": \"nope\", \"message\": \"hi\"}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "400 public client-supplied tenant_id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('error code VALIDATION_ERROR', function () { pm.expect(pm.response.json().error.code).to.eql('VALIDATION_ERROR'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Test-Mode",
+                "value": "none"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/public/forms/{{formId}}/submissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "public",
+                "forms",
+                "{{formId}}",
+                "submissions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"data\": {\"email\": \"v@example.com\"}, \"tenant_id\": \"2\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "400 public honeypot spam",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('error code SPAM_DETECTED', function () { pm.expect(pm.response.json().error.code).to.eql('SPAM_DETECTED'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Test-Mode",
+                "value": "none"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/public/forms/{{formId}}/submissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "public",
+                "forms",
+                "{{formId}}",
+                "submissions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"data\": {\"email\": \"v@example.com\", \"message\": \"hi\"}, \"honeypot\": \"http://spam\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "413 public oversized body",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 413', function () { pm.response.to.have.status(413); });",
+                  "pm.test('error code PAYLOAD_TOO_LARGE', function () { pm.expect(pm.response.json().error.code).to.eql('PAYLOAD_TOO_LARGE'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Test-Mode",
+                "value": "oversized"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/public/forms/{{formId}}/submissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "public",
+                "forms",
+                "{{formId}}",
+                "submissions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"data\": {}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "200 public idempotent submit (first)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.collectionVariables.set('idemId', pm.response.json().data.submissionId);",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Test-Mode",
+                "value": "none"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "pm-idem-{{formId}}-{{idemSuffix}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/public/forms/{{formId}}/submissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "public",
+                "forms",
+                "{{formId}}",
+                "submissions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"data\": {\"email\": \"v@example.com\", \"message\": \"hi\"}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "200 public idempotent replay returns same id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('same submission', function () { pm.expect(pm.response.json().data.submissionId).to.eql(pm.collectionVariables.get('idemId')); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Test-Mode",
+                "value": "none"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "pm-idem-{{formId}}-{{idemSuffix}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/public/forms/{{formId}}/submissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "public",
+                "forms",
+                "{{formId}}",
+                "submissions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"data\": {\"email\": \"v@example.com\", \"message\": \"hi\"}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "409 idempotency key reused with different payload",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 409', function () { pm.response.to.have.status(409); });",
+                  "pm.test('error code IDEMPOTENCY_CONFLICT', function () { pm.expect(pm.response.json().error.code).to.eql('IDEMPOTENCY_CONFLICT'); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Test-Mode",
+                "value": "none"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "pm-idem-{{formId}}-{{idemSuffix}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/public/forms/{{formId}}/submissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "public",
+                "forms",
+                "{{formId}}",
+                "submissions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"data\": {\"email\": \"v@example.com\", \"message\": \"a different message\"}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Cleanup",
+      "item": [
+        {
+          "name": "Delete form",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('success envelope', function () { pm.expect(json.success).to.eql(true); pm.expect(json.meta.requestId).to.be.a('string'); });",
+                  "pm.test('deleted', function () { pm.expect(json.data.deleted).to.eql(true); });",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forms/{{formId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forms",
+                "{{formId}}"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

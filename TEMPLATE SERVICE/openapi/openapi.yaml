@@ -1,0 +1,172 @@
+openapi: 3.1.0
+info:
+  title: Template Service API
+  version: 1.0.0
+  description: |
+    Template catalog, immutable versions and idempotent apply for the Website Builder platform.
+    Private service behind a trusted BFF: every /api/v1 call needs the internal Bearer token plus trusted context headers.
+    All IDs are decimal BIGINT strings (never JSON numbers).
+servers:
+  - url: http://localhost:4018
+security:
+  - internalBearer: []
+components:
+  securitySchemes:
+    internalBearer: { type: http, scheme: bearer }
+  parameters:
+    TenantId: { name: X-Tenant-Id, in: header, required: true, schema: { $ref: '#/components/schemas/Id' } }
+    OrganizationId: { name: X-Organization-Id, in: header, required: true, schema: { $ref: '#/components/schemas/Id' } }
+    UserId: { name: X-User-Id, in: header, required: true, schema: { $ref: '#/components/schemas/Id' } }
+    SoftwareId: { name: X-Software-Id, in: header, required: false, schema: { $ref: '#/components/schemas/Id' } }
+    Permissions: { name: X-Permissions, in: header, required: false, description: Comma separated permissions injected by the BFF., schema: { type: string } }
+    RequestId: { name: X-Request-Id, in: header, required: false, schema: { type: string } }
+    TemplateId: { name: templateId, in: path, required: true, schema: { $ref: '#/components/schemas/Id' } }
+    VersionId: { name: versionId, in: path, required: true, schema: { $ref: '#/components/schemas/Id' } }
+    IdempotencyKey: { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 8, maxLength: 200 } }
+    IfMatch: { name: If-Match, in: header, required: false, description: 'e.g. "revision-7"', schema: { type: string } }
+  schemas:
+    Id: { type: string, pattern: '^[0-9]+$' }
+    Error:
+      type: object
+      required: [success, error]
+      properties:
+        success: { const: false }
+        error:
+          type: object
+          required: [code, message, requestId]
+          properties: { code: { type: string }, message: { type: string }, requestId: { type: string }, details: { type: array, items: {} } }
+    Template:
+      type: object
+      properties:
+        id: { $ref: '#/components/schemas/Id' }
+        scope: { enum: [GLOBAL, TENANT] }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: [string, 'null'] }
+        category: { type: [object, 'null'] }
+        industry: { type: [string, 'null'] }
+        thumbnailAssetId: { oneOf: [{ $ref: '#/components/schemas/Id' }, { type: 'null' }] }
+        publishedVersion: { type: [object, 'null'] }
+        tags: { type: array, items: { type: string } }
+        visibility: { enum: [PUBLIC, PRIVATE, UNLISTED] }
+        status: { enum: [DRAFT, ACTIVE, ARCHIVED] }
+        revision: { type: integer }
+    TemplateCreate:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name: { type: string, maxLength: 160 }
+        slug: { type: string }
+        description: { type: [string, 'null'] }
+        categoryId: { $ref: '#/components/schemas/Id' }
+        industry: { type: string }
+        visibility: { enum: [PUBLIC, PRIVATE, UNLISTED] }
+        thumbnailAssetId: { $ref: '#/components/schemas/Id' }
+        tags: { type: array, items: { type: string }, maxItems: 20 }
+        scope: { enum: [TENANT, GLOBAL], description: GLOBAL requires template:global:admin }
+    TemplateUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string }
+        slug: { type: string }
+        description: { type: [string, 'null'] }
+        categoryId: { oneOf: [{ $ref: '#/components/schemas/Id' }, { type: 'null' }] }
+        industry: { type: [string, 'null'] }
+        visibility: { enum: [PUBLIC, PRIVATE, UNLISTED] }
+        thumbnailAssetId: { oneOf: [{ $ref: '#/components/schemas/Id' }, { type: 'null' }] }
+        tags: { type: array, items: { type: string } }
+    VersionCreate:
+      type: object
+      required: [snapshot]
+      properties: { snapshot: { type: object, description: Template snapshot (schemaVersion 1) }, changelog: { type: string } }
+    Version:
+      type: object
+      properties:
+        id: { $ref: '#/components/schemas/Id' }
+        templateId: { $ref: '#/components/schemas/Id' }
+        versionNumber: { type: integer }
+        state: { enum: [DRAFT, IN_REVIEW, APPROVED, PUBLISHED, REJECTED, DEPRECATED] }
+        checksum: { type: string, pattern: '^[a-f0-9]{64}$' }
+    ApplyRequest:
+      type: object
+      required: [websiteId]
+      additionalProperties: false
+      properties:
+        websiteId: { $ref: '#/components/schemas/Id' }
+        websiteName: { type: string }
+        includeDemoContent: { type: boolean }
+        options: { type: object, properties: { locale: { type: string } } }
+    Envelope:
+      type: object
+      properties: { success: { const: true }, data: {}, requestId: { type: string } }
+  responses:
+    Err: { description: Error, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+paths:
+  /health: { get: { security: [], summary: Liveness, responses: { '200': { description: ok } } } }
+  /ready: { get: { security: [], summary: Readiness, responses: { '200': { description: ready }, '503': { description: not ready } } } }
+  /api/v1/templates:
+    parameters: [ { $ref: '#/components/parameters/TenantId' }, { $ref: '#/components/parameters/OrganizationId' }, { $ref: '#/components/parameters/UserId' }, { $ref: '#/components/parameters/SoftwareId' }, { $ref: '#/components/parameters/Permissions' }, { $ref: '#/components/parameters/RequestId' } ]
+    get:
+      summary: Browse/search the published catalog (template:read)
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: categoryId, in: query, schema: { $ref: '#/components/schemas/Id' } }
+        - { name: tag, in: query, schema: { type: string } }
+        - { name: industry, in: query, schema: { type: string } }
+        - { name: visibility, in: query, schema: { enum: [PUBLIC, PRIVATE, UNLISTED] } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: sort, in: query, schema: { enum: [createdAt, updatedAt, name], default: createdAt } }
+        - { name: order, in: query, schema: { enum: [asc, desc], default: desc } }
+      responses: { '200': { description: OK }, '400': { $ref: '#/components/responses/Err' }, '401': { $ref: '#/components/responses/Err' }, '403': { $ref: '#/components/responses/Err' } }
+    post:
+      summary: Create template metadata (template:create)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TemplateCreate' } } } }
+      responses: { '201': { description: Created }, '409': { $ref: '#/components/responses/Err' }, '422': { $ref: '#/components/responses/Err' } }
+  /api/v1/templates/{templateId}:
+    parameters: [ { $ref: '#/components/parameters/TemplateId' } ]
+    get: { summary: Get template (template:read), responses: { '200': { description: OK, headers: { ETag: { schema: { type: string } } } }, '404': { $ref: '#/components/responses/Err' } } }
+    patch:
+      summary: Update metadata (template:update)
+      parameters: [ { $ref: '#/components/parameters/IfMatch' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TemplateUpdate' } } } }
+      responses: { '200': { description: OK }, '404': { $ref: '#/components/responses/Err' }, '409': { $ref: '#/components/responses/Err' }, '412': { $ref: '#/components/responses/Err' } }
+  /api/v1/templates/{templateId}/archive:
+    parameters: [ { $ref: '#/components/parameters/TemplateId' } ]
+    post: { summary: Archive (template:archive), responses: { '200': { description: OK }, '404': { $ref: '#/components/responses/Err' } } }
+  /api/v1/templates/{templateId}/versions:
+    parameters: [ { $ref: '#/components/parameters/TemplateId' } ]
+    get: { summary: List versions (template:version:read), responses: { '200': { description: OK } } }
+    post:
+      summary: Create draft version (template:version:create)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/VersionCreate' } } } }
+      responses: { '201': { description: Created }, '422': { $ref: '#/components/responses/Err' } }
+  /api/v1/templates/{templateId}/versions/{versionId}:
+    parameters: [ { $ref: '#/components/parameters/TemplateId' }, { $ref: '#/components/parameters/VersionId' } ]
+    get: { summary: Get version with snapshot (template:version:read), responses: { '200': { description: OK }, '404': { $ref: '#/components/responses/Err' } } }
+  /api/v1/templates/{templateId}/versions/{versionId}/submit-review:
+    parameters: [ { $ref: '#/components/parameters/TemplateId' }, { $ref: '#/components/parameters/VersionId' } ]
+    post: { summary: DRAFT -> IN_REVIEW (template:review:submit), responses: { '200': { description: OK }, '409': { $ref: '#/components/responses/Err' } } }
+  /api/v1/templates/{templateId}/versions/{versionId}/approve:
+    parameters: [ { $ref: '#/components/parameters/TemplateId' }, { $ref: '#/components/parameters/VersionId' } ]
+    post: { summary: IN_REVIEW -> APPROVED (template:review:approve), responses: { '200': { description: OK }, '409': { $ref: '#/components/responses/Err' } } }
+  /api/v1/templates/{templateId}/versions/{versionId}/publish:
+    parameters: [ { $ref: '#/components/parameters/TemplateId' }, { $ref: '#/components/parameters/VersionId' } ]
+    post: { summary: APPROVED -> PUBLISHED (template:publish), responses: { '200': { description: OK }, '409': { $ref: '#/components/responses/Err' } } }
+  /api/v1/templates/{templateId}/versions/{versionId}/deprecate:
+    parameters: [ { $ref: '#/components/parameters/TemplateId' }, { $ref: '#/components/parameters/VersionId' } ]
+    post: { summary: PUBLISHED|APPROVED -> DEPRECATED (template:version:admin), responses: { '200': { description: OK }, '409': { $ref: '#/components/responses/Err' } } }
+  /api/v1/categories: { get: { summary: List categories (template:read), responses: { '200': { description: OK } } } }
+  /api/v1/tags: { get: { summary: List tags (template:read), responses: { '200': { description: OK } } } }
+  /api/v1/templates/{templateId}/apply:
+    parameters: [ { $ref: '#/components/parameters/TemplateId' }, { $ref: '#/components/parameters/IdempotencyKey' } ]
+    post:
+      summary: Apply the published version to a website as an editable draft (template:apply). Never publishes.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ApplyRequest' } } } }
+      responses: { '202': { description: Accepted }, '400': { $ref: '#/components/responses/Err' }, '409': { description: Idempotency-Key reused with a different request }, '422': { $ref: '#/components/responses/Err' }, '503': { $ref: '#/components/responses/Err' } }
+  /api/v1/template-applications/{applicationId}:
+    parameters: [ { name: applicationId, in: path, required: true, schema: { $ref: '#/components/schemas/Id' } } ]
+    get: { summary: Application status (template:apply:read), responses: { '200': { description: OK }, '404': { $ref: '#/components/responses/Err' } } }

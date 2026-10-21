@@ -1,0 +1,8 @@
+{
+  "name": "publishing-api-service",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/main.js",
+  "scripts": { "start": "node src/main.js" },
+  "dependencies": { "express": "^4.19.2", "jsonwebtoken": "^9.0.2", "pg": "^8.12.0" }
+}

@@ -1,0 +1,9 @@
+DROP TABLE IF EXISTS audit_log;
+DROP TABLE IF EXISTS template_applications;
+DROP TABLE IF EXISTS template_tag_links;
+DROP TABLE IF EXISTS template_versions;
+DROP TABLE IF EXISTS templates;
+DROP TABLE IF EXISTS template_tags;
+DROP TABLE IF EXISTS template_categories;
+DROP FUNCTION IF EXISTS templates_version_ref_check();
+DROP FUNCTION IF EXISTS template_versions_immutable();

@@ -1,0 +1,38 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: form_api
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d form_api"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/form_api
+      AUTH_MODE: direct-jwt
+      # LOCAL DEV ONLY - override via environment / secret manager for any real deployment.
+      JWT_SECRET: ${JWT_SECRET:-local-dev-only-secret-change-me-0123456789}
+      JWT_ISSUER: ${JWT_ISSUER:-triostackone-bff}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-form-api}
+      # Comma-separated UI origins allowed by CORS, e.g. http://localhost:5173 (empty = disabled)
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

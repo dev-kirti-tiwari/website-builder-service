@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: template-service-postgres
+    environment:
+      POSTGRES_USER: app_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: template_service
+    ports:
+      - "5442:5432"
+    volumes:
+      - template_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app_user -d template_service"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    container_name: template-service-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "4018:4018"
+    environment:
+      # Local development defaults only: INTEGRATIONS_MODE=stub is rejected when NODE_ENV=production.
+      NODE_ENV: development
+      PORT: 4018
+      DATABASE_URL: postgresql://app_user:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/template_service
+      STATIC_INTERNAL_TOKEN: ${STATIC_INTERNAL_TOKEN:?set STATIC_INTERNAL_TOKEN in .env}
+      INTEGRATIONS_MODE: stub
+      LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4018/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  template_pg_data:
