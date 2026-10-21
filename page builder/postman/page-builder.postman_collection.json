@@ -1,0 +1,2804 @@
+{
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const NEEDS = {\"Create page - duplicate slug (409)\":[\"slug\"],\"List pages\":[\"pageId\",\"slug\"],\"Get page\":[\"pageId\"],\"Rename page / set status\":[\"pageId\"],\"Add section: hero\":[\"pageId\"],\"Add section: features\":[\"pageId\"],\"Add section: images\":[\"pageId\"],\"Add section: testimonials\":[\"pageId\"],\"Add section: pricing\":[\"pageId\"],\"Add section: faq\":[\"pageId\"],\"Add section: cta\":[\"pageId\"],\"Add section: form\":[\"pageId\"],\"Configure features section\":[\"pageId\",\"sec_features\"],\"Reorder sections (reverse)\":[\"pageId\"],\"Duplicate section (faq)\":[\"pageId\",\"sec_faq\"],\"Remove duplicated section\":[\"pageId\",\"dupSectionId\"],\"Update page layout\":[\"pageId\"],\"Invalid layout (422)\":[\"pageId\"],\"GET draft\":[\"pageId\"],\"Autosave at current revision\":[\"pageId\",\"revision\",\"sec_hero\"],\"Autosave with stale revision (409)\":[\"pageId\",\"staleRevision\",\"revision\",\"sec_hero\"],\"Stale write left data intact\":[\"pageId\",\"revision\"],\"List revisions\":[\"pageId\"],\"Restore revision (all 8 sections, original order)\":[\"pageId\",\"revision\",\"fullRevision\"],\"Restore unknown revision (404)\":[\"pageId\"],\"Set hero contentRef\":[\"pageId\",\"sec_hero\"],\"GET preview\":[\"pageId\"],\"Duplicate page\":[\"pageId\",\"slug\"],\"Duplicated page has new section IDs\":[\"dupPageId\"],\"Viewer can read (200)\":[\"pageId\"],\"Cross-workspace page is not exposed (404)\":[\"pageId\"],\"Unsupported section type (422)\":[\"pageId\"],\"Unsupported variant (422)\":[\"pageId\"],\"Columns out of range (422)\":[\"pageId\"],\"Unknown config key / raw CSS rejected (422)\":[\"pageId\"],\"Reorder with duplicate IDs (422)\":[\"pageId\"],\"Section from another page (404)\":[\"dupPageId\",\"sec_hero\"],\"Editor cannot delete (403)\":[\"pageId\"],\"Admin soft-deletes page\":[\"pageId\"],\"Deleted page is gone (404)\":[\"pageId\"],\"Deleted page cannot be mutated (404)\":[\"pageId\"],\"Deleted page absent from list\":[\"pageId\",\"slug\"],\"Slug reusable after delete\":[\"pageId\",\"slug\"]};",
+          "const TYPES = [\"hero\",\"features\",\"images\",\"testimonials\",\"pricing\",\"faq\",\"cta\",\"form\"];",
+          "const used = NEEDS[pm.info.requestName];",
+          "if (used) {",
+          "  const cv = pm.collectionVariables;",
+          "  const base = pm.environment.get('baseUrl'), ws = pm.environment.get('workspaceId'), tok = pm.environment.get('token');",
+          "  const call = (method, path, body, done) => pm.sendRequest({",
+          "    url: base + path, method,",
+          "    header: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok, 'X-Workspace-Id': ws },",
+          "    body: body ? { mode: 'raw', raw: JSON.stringify(body) } : undefined,",
+          "  }, (err, res) => {",
+          "    if (err || res.code >= 300) { console.error('fixture ' + method + ' ' + path + ' failed', err || res.code); return; }",
+          "    done(res.json());",
+          "  });",
+          "  const addSections = (pageId, i, done) => {",
+          "    if (i >= TYPES.length) return done();",
+          "    call('POST', '/api/v1/pages/' + pageId + '/sections', { type: TYPES[i] }, (r) => {",
+          "      cv.set('sec_' + TYPES[i], r.data.id); cv.set('revision', String(r.meta.revision));",
+          "      addSections(pageId, i + 1, done);",
+          "    });",
+          "  };",
+          "  const ensurePage = (done) => {",
+          "    if (cv.get('pageId')) return done();",
+          "    const slug = 'fixture-' + Date.now();",
+          "    call('POST', '/api/v1/pages', { name: 'Fixture page', slug }, (r) => {",
+          "      cv.set('slug', slug); cv.set('pageId', r.data.id);",
+          "      addSections(r.data.id, 0, () => { cv.set('fullRevision', cv.get('revision')); done(); });",
+          "    });",
+          "  };",
+          "  const ensureDupPage = (done) => {",
+          "    if (!used.includes('dupPageId') || cv.get('dupPageId')) return done();",
+          "    call('POST', '/api/v1/pages/' + cv.get('pageId') + '/duplicate', null, (r) => { cv.set('dupPageId', r.data.id); done(); });",
+          "  };",
+          "  const ensureDupSection = (done) => {",
+          "    if (!used.includes('dupSectionId') || cv.get('dupSectionId')) return done();",
+          "    call('POST', '/api/v1/pages/' + cv.get('pageId') + '/sections/' + cv.get('sec_faq') + '/duplicate', null, (r) => {",
+          "      cv.set('dupSectionId', r.data.id); cv.set('revision', String(r.meta.revision)); done();",
+          "    });",
+          "  };",
+          "  ensurePage(() => ensureDupPage(() => ensureDupSection(() => {",
+          "    if (used.includes('staleRevision') && !cv.get('staleRevision')) cv.set('staleRevision', '1');",
+          "  })));",
+          "}"
+        ]
+      }
+    }
+  ],
+  "info": {
+    "name": "Page Builder API",
+    "description": "Page Builder V1. Use with the \"Page Builder - Local\" environment. Run the whole collection in order (Runner / newman).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Health & Readiness",
+      "item": [
+        {
+          "name": "GET /health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json(); pm.test('ok', () => pm.expect(j.data.status).to.eql('ok'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /ready",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json(); pm.test('ready', () => pm.expect(j.data.status).to.eql('ready'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ready"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Pages",
+      "item": [
+        {
+          "name": "Create page",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"slug\", \"landing-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"success envelope\", () => { const b = pm.response.json(); pm.expect(b.success).to.eql(true); pm.expect(b.meta.requestId).to.be.a(\"string\"); });",
+                  "pm.test(\"name trimmed, DRAFT, revision 1\", () => { pm.expect(j.data.name).to.eql(\"Product Landing Page\"); pm.expect(j.data.status).to.eql(\"DRAFT\"); pm.expect(j.data.revision).to.eql(1); });",
+                  "pm.test(\"BIGINT id is a string\", () => pm.expect(j.data.id).to.be.a(\"string\"));",
+                  "pm.collectionVariables.set(\"pageId\", j.data.id); pm.collectionVariables.set(\"revision\", String(j.data.revision));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"  Product Landing Page  \",\n  \"slug\": \"{{slug}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create page - duplicate slug (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 409', () => pm.response.to.have.status(409));",
+                  "pm.test('error code is SLUG_CONFLICT', () => pm.expect(pm.response.json().error.code).to.eql('SLUG_CONFLICT'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"name\": \"Clash\", \"slug\": \"{{slug}}\" }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List pages",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"contains created page + pagination\", () => { pm.expect(j.data.map(p => p.id)).to.include(pm.collectionVariables.get(\"pageId\")); pm.expect(j.meta.pagination.total).to.be.at.least(1); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages?limit=100&q={{slug}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100"
+                },
+                {
+                  "key": "q",
+                  "value": "{{slug}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get page",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"same page\", () => pm.expect(j.data.id).to.eql(pm.collectionVariables.get(\"pageId\")));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Rename page / set status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"updated\", () => { pm.expect(j.data.name).to.eql(\"Product Landing (renamed)\"); pm.expect(j.data.status).to.eql(\"PUBLISHED\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Product Landing (renamed)\",\n  \"status\": \"PUBLISHED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sections",
+      "item": [
+        {
+          "name": "GET section types (8)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"eight types\", () => pm.expect(j.data.map(t => t.type)).to.eql([\"hero\",\"features\",\"images\",\"testimonials\",\"pricing\",\"faq\",\"cta\",\"form\"]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/section-types",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "section-types"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Add section: hero",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set(\"sec_hero\", j.data.id);",
+                  "if (j.meta && j.meta.revision) pm.collectionVariables.set(\"revision\", String(j.meta.revision));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"hero\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/sections",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "sections"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Add section: features",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set(\"sec_features\", j.data.id);",
+                  "if (j.meta && j.meta.revision) pm.collectionVariables.set(\"revision\", String(j.meta.revision));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"features\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/sections",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "sections"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Add section: images",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set(\"sec_images\", j.data.id);",
+                  "if (j.meta && j.meta.revision) pm.collectionVariables.set(\"revision\", String(j.meta.revision));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"images\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/sections",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "sections"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Add section: testimonials",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set(\"sec_testimonials\", j.data.id);",
+                  "if (j.meta && j.meta.revision) pm.collectionVariables.set(\"revision\", String(j.meta.revision));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"testimonials\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/sections",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "sections"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Add section: pricing",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set(\"sec_pricing\", j.data.id);",
+                  "if (j.meta && j.meta.revision) pm.collectionVariables.set(\"revision\", String(j.meta.revision));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"pricing\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/sections",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "sections"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Add section: faq",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set(\"sec_faq\", j.data.id);",
+                  "if (j.meta && j.meta.revision) pm.collectionVariables.set(\"revision\", String(j.meta.revision));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"faq\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/sections",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "sections"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Add section: cta",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set(\"sec_cta\", j.data.id);",
+                  "if (j.meta && j.meta.revision) pm.collectionVariables.set(\"revision\", String(j.meta.revision));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"cta\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/sections",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "sections"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Add section: form",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set(\"sec_form\", j.data.id);",
+                  "if (j.meta && j.meta.revision) pm.collectionVariables.set(\"revision\", String(j.meta.revision));",
+                  "pm.collectionVariables.set(\"fullRevision\", String(j.meta.revision));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"form\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/sections",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "sections"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Configure features section",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "if (j.meta && j.meta.revision) pm.collectionVariables.set(\"revision\", String(j.meta.revision));",
+                  "pm.test(\"merged config\", () => { pm.expect(j.data.configuration.columns).to.eql(4); pm.expect(j.data.configuration.gap).to.eql(\"24px\"); pm.expect(j.data.visible).to.eql(false); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"configuration\": {\n    \"columns\": 4\n  },\n  \"responsive\": {\n    \"mobile\": {\n      \"visible\": false\n    }\n  },\n  \"visible\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/sections/{{sec_features}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "sections",
+                "{{sec_features}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reorder sections (reverse)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ids = [\"hero\",\"features\",\"images\",\"testimonials\",\"pricing\",\"faq\",\"cta\",\"form\"].map(t => pm.collectionVariables.get(\"sec_\" + t)).reverse(); pm.collectionVariables.set(\"reversedIds\", JSON.stringify(ids)); pm.variables.set(\"reorderBody\", JSON.stringify({ sectionIds: ids }));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "if (j.meta && j.meta.revision) pm.collectionVariables.set(\"revision\", String(j.meta.revision));",
+                  "pm.test(\"order persisted\", () => pm.expect(j.data.map(s => s.id)).to.eql(JSON.parse(pm.collectionVariables.get(\"reversedIds\"))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{{reorderBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/sections/order",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "sections",
+                "order"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Duplicate section (faq)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "if (j.meta && j.meta.revision) pm.collectionVariables.set(\"revision\", String(j.meta.revision));",
+                  "pm.test(\"new id\", () => pm.expect(j.data.id).to.not.eql(pm.collectionVariables.get(\"sec_faq\")));",
+                  "pm.collectionVariables.set(\"dupSectionId\", j.data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/sections/{{sec_faq}}/duplicate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "sections",
+                "{{sec_faq}}",
+                "duplicate"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Remove duplicated section",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "if (j.meta && j.meta.revision) pm.collectionVariables.set(\"revision\", String(j.meta.revision));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/sections/{{dupSectionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "sections",
+                "{{dupSectionId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Layout",
+      "item": [
+        {
+          "name": "Update page layout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "if (j.meta && j.meta.revision) pm.collectionVariables.set(\"revision\", String(j.meta.revision));",
+                  "pm.test(\"layout stored\", () => pm.expect(j.data.layout.containerWidth).to.eql(\"1200px\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"layout\": {\n    \"variant\": \"split\",\n    \"containerWidth\": \"1200px\",\n    \"columns\": 2,\n    \"gap\": \"24px\",\n    \"alignment\": \"center\"\n  },\n  \"responsive\": {\n    \"mobile\": {\n      \"columns\": 1\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/layout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "layout"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Invalid layout (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 422', () => pm.response.to.have.status(422));",
+                  "pm.test('error code is VALIDATION_ERROR', () => pm.expect(pm.response.json().error.code).to.eql('VALIDATION_ERROR'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"layout\": {\n    \"variant\": \"weird\",\n    \"css\": \"x\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/layout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "layout"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Draft & Autosave",
+      "item": [
+        {
+          "name": "GET draft",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set(\"revision\", String(j.data.revision));",
+                  "pm.test(\"8 sections\", () => pm.expect(j.data.sections.length).to.eql(8));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/draft",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "draft"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Autosave at current revision",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.sendRequest({ url: pm.environment.get(\"baseUrl\") + \"/api/v1/pages/\" + pm.collectionVariables.get(\"pageId\") + \"/draft\", method: \"GET\", header: { Authorization: \"Bearer \" + pm.environment.get(\"token\"), \"X-Workspace-Id\": pm.environment.get(\"workspaceId\") } }, (e, r) => { if (!e && r.code === 200) pm.collectionVariables.set(\"revision\", String(r.json().data.revision)); });",
+                  "pm.collectionVariables.set(\"beforeAutosave\", pm.collectionVariables.get(\"revision\"));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"revision incremented\", () => pm.expect(j.data.revision).to.eql(Number(pm.collectionVariables.get(\"beforeAutosave\")) + 1));",
+                  "pm.collectionVariables.set(\"staleRevision\", pm.collectionVariables.get(\"beforeAutosave\")); pm.collectionVariables.set(\"revision\", String(j.data.revision));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": {{revision}},\n  \"changes\": { \"sections\": [ { \"id\": \"{{sec_hero}}\", \"configuration\": { \"alignment\": \"left\" } } ] }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/draft",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "draft"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Autosave with stale revision (409)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.sendRequest({ url: pm.environment.get(\"baseUrl\") + \"/api/v1/pages/\" + pm.collectionVariables.get(\"pageId\") + \"/draft\", method: \"GET\", header: { Authorization: \"Bearer \" + pm.environment.get(\"token\"), \"X-Workspace-Id\": pm.environment.get(\"workspaceId\") } }, (e, r) => { if (!e && r.code === 200) { const cur = r.json().data.revision; pm.collectionVariables.set(\"revision\", String(cur)); pm.collectionVariables.set(\"staleRevision\", String(Math.max(1, cur - 1))); } });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 409', () => pm.response.to.have.status(409));",
+                  "pm.test('error code is REVISION_CONFLICT', () => pm.expect(pm.response.json().error.code).to.eql('REVISION_CONFLICT'));",
+                  "pm.test(\"reports current revision\", () => pm.expect(pm.response.json().error.details[0].currentRevision).to.eql(Number(pm.collectionVariables.get(\"revision\"))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": {{staleRevision}},\n  \"changes\": { \"sections\": [ { \"id\": \"{{sec_hero}}\", \"configuration\": { \"alignment\": \"right\" } } ] }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/draft",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "draft"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Stale write left data intact",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"revision unchanged by the rejected write\", () => pm.expect(j.data.revision).to.eql(Number(pm.collectionVariables.get(\"revision\"))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/draft",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "draft"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Revisions",
+      "item": [
+        {
+          "name": "List revisions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"history, newest first\", () => { pm.expect(j.data.length).to.be.above(8); pm.expect(j.data[0].revision).to.be.above(j.data[1].revision); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/revisions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "revisions"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Restore revision (all 8 sections, original order)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"beforeRestore\", pm.collectionVariables.get(\"revision\"));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"new revision created\", () => pm.expect(j.data.revision).to.eql(Number(pm.collectionVariables.get(\"beforeRestore\")) + 1));",
+                  "pm.collectionVariables.set(\"revision\", String(j.data.revision));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/revisions/{{fullRevision}}/restore",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "revisions",
+                "{{fullRevision}}",
+                "restore"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Restore unknown revision (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('error code is REVISION_NOT_FOUND', () => pm.expect(pm.response.json().error.code).to.eql('REVISION_NOT_FOUND'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/revisions/999999/restore",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "revisions",
+                "999999",
+                "restore"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Preview",
+      "item": [
+        {
+          "name": "Set hero contentRef",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contentRef\": \"content:hero-1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/sections/{{sec_hero}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "sections",
+                "{{sec_hero}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET preview",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"ordered structure\", () => { pm.expect(j.data.sections.map(s => s.type)).to.eql([\"hero\",\"features\",\"images\",\"testimonials\",\"pricing\",\"faq\",\"cta\",\"form\"]); pm.expect(j.data.sections.map(s => s.position)).to.eql([1,2,3,4,5,6,7,8]); });",
+                  "pm.test(\"content refs match sections that carry one\", () => pm.expect(j.data.contentReferences).to.eql(j.data.sections.filter(s => s.contentRef).map(s => ({ sectionId: s.id, type: s.type, contentRef: s.contentRef }))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/preview",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "preview"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Page Duplicate",
+      "item": [
+        {
+          "name": "Duplicate page",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"copy slug\", () => pm.expect(j.data.slug).to.eql(pm.collectionVariables.get(\"slug\") + \"-copy\"));",
+                  "pm.collectionVariables.set(\"dupPageId\", j.data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/duplicate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "duplicate"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Duplicated page has new section IDs",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "const orig = TYPES_IDS(); function TYPES_IDS() { return [\"hero\",\"features\",\"images\",\"testimonials\",\"pricing\",\"faq\",\"cta\",\"form\"].map(t => pm.collectionVariables.get(\"sec_\" + t)); }",
+                  "pm.test(\"8 sections, none shared with original\", () => { pm.expect(j.data.sections.length).to.eql(8); pm.expect(j.data.sections.some(s => orig.includes(s.id))).to.eql(false); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{dupPageId}}?include=structure",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{dupPageId}}"
+              ],
+              "query": [
+                {
+                  "key": "include",
+                  "value": "structure"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Authorization & Workspace Isolation",
+      "item": [
+        {
+          "name": "No token (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401));",
+                  "pm.test('error code is AUTHORIZATION_REQUIRED', () => pm.expect(pm.response.json().error.code).to.eql('AUTHORIZATION_REQUIRED'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Invalid token (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401));",
+                  "pm.test('error code is INVALID_TOKEN', () => pm.expect(pm.response.json().error.code).to.eql('INVALID_TOKEN'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer not.a.token"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Missing workspace header (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('error code is WORKSPACE_REQUIRED', () => pm.expect(pm.response.json().error.code).to.eql('WORKSPACE_REQUIRED'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Actor without workspace access (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('error code is FORBIDDEN', () => pm.expect(pm.response.json().error.code).to.eql('FORBIDDEN'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{otherWorkspaceToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Viewer cannot create (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"x\",\n  \"slug\": \"x\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{viewerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Viewer can read (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{viewerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cross-workspace page is not exposed (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('error code is PAGE_NOT_FOUND', () => pm.expect(pm.response.json().error.code).to.eql('PAGE_NOT_FOUND'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{otherWorkspaceId}}"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{crossToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Internal service token (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Internal-Service-Token",
+                "value": "{{internalToken}}"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Validation & Error Handling",
+      "item": [
+        {
+          "name": "Unsupported section type (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 422', () => pm.response.to.have.status(422));",
+                  "pm.test('error code is VALIDATION_ERROR', () => pm.expect(pm.response.json().error.code).to.eql('VALIDATION_ERROR'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"carousel\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/sections",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "sections"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Unsupported variant (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 422', () => pm.response.to.have.status(422));",
+                  "pm.test('error code is SECTION_CONFIG_INVALID', () => pm.expect(pm.response.json().error.code).to.eql('SECTION_CONFIG_INVALID'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"hero\",\n  \"variant\": \"nope\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/sections",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "sections"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Columns out of range (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 422', () => pm.response.to.have.status(422));",
+                  "pm.test('error code is SECTION_CONFIG_INVALID', () => pm.expect(pm.response.json().error.code).to.eql('SECTION_CONFIG_INVALID'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"features\",\n  \"configuration\": {\n    \"columns\": 99\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/sections",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "sections"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Unknown config key / raw CSS rejected (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 422', () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"features\",\n  \"configuration\": {\n    \"gap\": \"expression(alert(1))\",\n    \"css\": \"x\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/sections",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "sections"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Invalid slug (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 422', () => pm.response.to.have.status(422));",
+                  "pm.test('error code is VALIDATION_ERROR', () => pm.expect(pm.response.json().error.code).to.eql('VALIDATION_ERROR'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"a\",\n  \"slug\": \"Bad Slug!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Whitespace-only name (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 422', () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"   \",\n  \"slug\": \"ok-slug\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reorder with duplicate IDs (422)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ids = [\"hero\",\"features\",\"images\",\"testimonials\",\"pricing\",\"faq\",\"cta\",\"form\"].map(t => pm.collectionVariables.get(\"sec_\" + t)); ids[1] = ids[0]; pm.variables.set(\"dupBody\", JSON.stringify({ sectionIds: ids }));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 422', () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{{dupBody}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/sections/order",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "sections",
+                "order"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Section from another page (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('error code is SECTION_NOT_FOUND', () => pm.expect(pm.response.json().error.code).to.eql('SECTION_NOT_FOUND'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"visible\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{dupPageId}}/sections/{{sec_hero}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{dupPageId}}",
+                "sections",
+                "{{sec_hero}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Oversized body (413)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set(\"bigName\", \"x\".repeat(600000));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 413', () => pm.response.to.have.status(413));",
+                  "pm.test('error code is PAYLOAD_TOO_LARGE', () => pm.expect(pm.response.json().error.code).to.eql('PAYLOAD_TOO_LARGE'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"{{bigName}}\",\"slug\":\"big\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Wrong content type (415)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 415', () => pm.response.to.have.status(415));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "text/plain"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "name=x",
+              "options": {
+                "raw": {
+                  "language": "text"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Malformed JSON (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('error code is BAD_REQUEST', () => pm.expect(pm.response.json().error.code).to.eql('BAD_REQUEST'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{oops",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Unknown route (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('error code is NOT_FOUND', () => pm.expect(pm.response.json().error.code).to.eql('NOT_FOUND'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/nope",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "nope"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Soft Delete",
+      "item": [
+        {
+          "name": "Editor cannot delete (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Admin soft-deletes page",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Deleted page is gone (404)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.sendRequest({ url: pm.environment.get(\"baseUrl\") + \"/api/v1/pages/\" + pm.collectionVariables.get(\"pageId\"), method: \"DELETE\", header: { Authorization: \"Bearer \" + pm.environment.get(\"adminToken\"), \"X-Workspace-Id\": pm.environment.get(\"workspaceId\") } }, () => {});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('error code is PAGE_NOT_FOUND', () => pm.expect(pm.response.json().error.code).to.eql('PAGE_NOT_FOUND'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Deleted page cannot be mutated (404)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.sendRequest({ url: pm.environment.get(\"baseUrl\") + \"/api/v1/pages/\" + pm.collectionVariables.get(\"pageId\"), method: \"DELETE\", header: { Authorization: \"Bearer \" + pm.environment.get(\"adminToken\"), \"X-Workspace-Id\": pm.environment.get(\"workspaceId\") } }, () => {});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"hero\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/sections",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "sections"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Deleted page absent from list",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.sendRequest({ url: pm.environment.get(\"baseUrl\") + \"/api/v1/pages/\" + pm.collectionVariables.get(\"pageId\"), method: \"DELETE\", header: { Authorization: \"Bearer \" + pm.environment.get(\"adminToken\"), \"X-Workspace-Id\": pm.environment.get(\"workspaceId\") } }, () => {});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"not listed\", () => pm.expect(j.data.map(p => p.id)).to.not.include(pm.collectionVariables.get(\"pageId\")));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages?limit=100&q={{slug}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100"
+                },
+                {
+                  "key": "q",
+                  "value": "{{slug}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Slug reusable after delete",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.sendRequest({ url: pm.environment.get(\"baseUrl\") + \"/api/v1/pages/\" + pm.collectionVariables.get(\"pageId\"), method: \"DELETE\", header: { Authorization: \"Bearer \" + pm.environment.get(\"adminToken\"), \"X-Workspace-Id\": pm.environment.get(\"workspaceId\") } }, () => {});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "[\"pageId\",\"dupPageId\",\"dupSectionId\",\"revision\",\"fullRevision\",\"staleRevision\",\"slug\",\"reversedIds\",\"sec_hero\",\"sec_features\",\"sec_images\",\"sec_testimonials\",\"sec_pricing\",\"sec_faq\",\"sec_cta\",\"sec_form\"].forEach(k => pm.collectionVariables.unset(k));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"name\": \"Reborn\", \"slug\": \"{{slug}}\" }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

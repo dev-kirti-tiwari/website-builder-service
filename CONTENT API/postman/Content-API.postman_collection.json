@@ -1,0 +1,5217 @@
+{
+  "info": {
+    "_postman_id": "5d0b4a4e-3b7c-4f0a-8b9e-4f6f1c9a7a10",
+    "name": "Content API Service",
+    "description": "Content API V1. Every request sends Authorization: Bearer {{jwtToken}} (BRR/JWT), X-Workspace-Id and X-Request-Id. Run folders in order (the first request, GET /health, generates fresh ids for the run). Mint tokens with `npm run postman:env` (writes a git-ignored environment file) or `npm run token`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// ensure ids exist when a single request is run on its own",
+          "if (!pm.environment.get('runBase')) {",
+          "  const base = Date.now();",
+          "  pm.environment.set('runBase', String(base));",
+          "  pm.environment.set('pageId', String(base));",
+          "  pm.environment.set('sectionId', String(base + 1));",
+          "  pm.environment.set('featuresSectionId', String(base + 2));",
+          "  pm.environment.set('imagesSectionId', String(base + 3));",
+          "  pm.environment.set('testimonialsSectionId', String(base + 4));",
+          "  pm.environment.set('pricingSectionId', String(base + 5));",
+          "  pm.environment.set('faqSectionId', String(base + 6));",
+          "  pm.environment.set('ctaSectionId', String(base + 7));",
+          "  pm.environment.set('formSectionId', String(base + 8));",
+          "  pm.environment.set('dupTargetSectionId', String(base + 20));",
+          "  pm.environment.set('deleteSectionId', String(base + 21));",
+          "  pm.environment.set('missingSectionId', String(base + 22));",
+          "  pm.environment.set('requestId', 'req_pm_' + base);",
+          "  pm.environment.set('currentRevision', '');",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Health & Readiness",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const base = Date.now();",
+                  "pm.environment.set('runBase', String(base));",
+                  "pm.environment.set('pageId', String(base));",
+                  "pm.environment.set('sectionId', String(base + 1));",
+                  "pm.environment.set('featuresSectionId', String(base + 2));",
+                  "pm.environment.set('imagesSectionId', String(base + 3));",
+                  "pm.environment.set('testimonialsSectionId', String(base + 4));",
+                  "pm.environment.set('pricingSectionId', String(base + 5));",
+                  "pm.environment.set('faqSectionId', String(base + 6));",
+                  "pm.environment.set('ctaSectionId', String(base + 7));",
+                  "pm.environment.set('formSectionId', String(base + 8));",
+                  "pm.environment.set('dupTargetSectionId', String(base + 20));",
+                  "pm.environment.set('deleteSectionId', String(base + 21));",
+                  "pm.environment.set('missingSectionId', String(base + 22));",
+                  "pm.environment.set('requestId', 'req_pm_' + base);",
+                  "pm.environment.set('currentRevision', '');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('liveness ok', () => pm.expect(pm.response.json().status).to.eql('ok'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /ready",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ready"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('postgres up', () => { const j = pm.response.json(); pm.expect(j.status).to.eql('ready'); pm.expect(j.checks.postgres).to.eql('up'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET unknown route",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/nope",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "nope"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404', () => pm.response.to.have.status(404));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code NOT_FOUND', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('NOT_FOUND'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Content CRUD",
+      "item": [
+        {
+          "name": "POST create Hero content",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"hero\",\n  \"content\": {\n    \"heading\": \"Build Websites\",\n    \"subheading\": \"Fast and flexible\",\n    \"description\": \"Create professional pages without writing code.\",\n    \"mediaId\": \"90001\",\n    \"primaryButton\": {\n      \"label\": \"Get Started\",\n      \"url\": \"/signup\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test('envelope success=true with requestId', () => { pm.expect(j.success).to.eql(true); pm.expect(j.meta.requestId).to.eql(pm.environment.get('requestId')); });",
+                  "pm.test('revision 1, schemaVersion 1', () => { pm.expect(j.data.revision).to.eql(1); pm.expect(j.data.schemaVersion).to.eql(1); });",
+                  "pm.test('BIGINT ids are strings', () => { for (const k of ['id', 'pageId', 'sectionId']) pm.expect(j.data[k]).to.be.a('string'); });",
+                  "pm.test('content echoed', () => pm.expect(j.data.content.heading).to.eql('Build Websites'));",
+                  "pm.environment.set('contentId', j.data.id);",
+                  "pm.environment.set('currentRevision', j.data.revision);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET content",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('envelope success=true with requestId', () => { pm.expect(j.success).to.eql(true); pm.expect(j.meta.requestId).to.eql(pm.environment.get('requestId')); });",
+                  "pm.test('returns current content', () => { pm.expect(j.data.id).to.eql(pm.environment.get('contentId')); pm.expect(j.data.revision).to.eql(Number(pm.environment.get('currentRevision'))); pm.expect(j.data.sectionType).to.eql('hero'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT replace content (expectedRevision)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": {{currentRevision}},\n  \"content\": {\n    \"heading\": \"Build Better Websites\",\n    \"subheading\": \"Fast and flexible\",\n    \"description\": \"Create professional pages without writing code.\",\n    \"mediaId\": \"90001\",\n    \"primaryButton\": {\n      \"label\": \"Get Started\",\n      \"url\": \"/signup\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('envelope success=true with requestId', () => { pm.expect(j.success).to.eql(true); pm.expect(j.meta.requestId).to.eql(pm.environment.get('requestId')); });",
+                  "pm.test('revision incremented', () => pm.expect(j.data.revision).to.eql(Number(pm.environment.get('currentRevision')) + 1));",
+                  "pm.test('content replaced', () => pm.expect(j.data.content.heading).to.eql('Build Better Websites'));",
+                  "pm.environment.set('currentRevision', j.data.revision);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH partial update (merge patch; null removes key)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": {{currentRevision}},\n  \"content\": {\n    \"description\": \"Create professional websites faster.\",\n    \"subheading\": null,\n    \"primaryButton\": { \"label\": \"Start Now\" }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('envelope success=true with requestId', () => { pm.expect(j.success).to.eql(true); pm.expect(j.meta.requestId).to.eql(pm.environment.get('requestId')); });",
+                  "pm.test('revision incremented', () => pm.expect(j.data.revision).to.eql(Number(pm.environment.get('currentRevision')) + 1));",
+                  "pm.test('patched field changed', () => pm.expect(j.data.content.description).to.eql('Create professional websites faster.'));",
+                  "pm.test('null removed key', () => pm.expect(j.data.content).to.not.have.property('subheading'));",
+                  "pm.test('untouched fields kept, nested object merged', () => { pm.expect(j.data.content.heading).to.eql('Build Better Websites'); pm.expect(j.data.content.primaryButton).to.eql({ label: 'Start Now', url: '/signup' }); });",
+                  "pm.environment.set('currentRevision', j.data.revision);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Section types (Features / Images / Testimonials / Pricing / FAQ / CTA / Form)",
+      "item": [
+        {
+          "name": "POST create features content",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"features\",\n  \"content\": {\n    \"heading\": \"Why choose us\",\n    \"description\": \"Everything you need\",\n    \"items\": [\n      {\n        \"itemKey\": \"feat-1\",\n        \"title\": \"Fast\",\n        \"description\": \"Loads quickly\",\n        \"iconMediaId\": \"90002\"\n      },\n      {\n        \"itemKey\": \"feat-2\",\n        \"title\": \"Flexible\"\n      }\n    ]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{featuresSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{featuresSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test('envelope success=true with requestId', () => { pm.expect(j.success).to.eql(true); pm.expect(j.meta.requestId).to.eql(pm.environment.get('requestId')); });",
+                  "pm.test('features stored at revision 1', () => { pm.expect(j.data.sectionType).to.eql('features'); pm.expect(j.data.revision).to.eql(1); pm.expect(j.data.schemaVersion).to.eql(1); });",
+                  "pm.test('content round-trips', () => pm.expect(j.data.content).to.eql({\"heading\":\"Why choose us\",\"description\":\"Everything you need\",\"items\":[{\"itemKey\":\"feat-1\",\"title\":\"Fast\",\"description\":\"Loads quickly\",\"iconMediaId\":\"90002\"},{\"itemKey\":\"feat-2\",\"title\":\"Flexible\"}]}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST create images content",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"images\",\n  \"content\": {\n    \"heading\": \"Gallery\",\n    \"items\": [\n      {\n        \"itemKey\": \"img-1\",\n        \"mediaId\": \"90003\",\n        \"alt\": \"Our office\",\n        \"title\": \"Office\",\n        \"caption\": \"Where we work\"\n      }\n    ]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{imagesSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{imagesSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test('envelope success=true with requestId', () => { pm.expect(j.success).to.eql(true); pm.expect(j.meta.requestId).to.eql(pm.environment.get('requestId')); });",
+                  "pm.test('images stored at revision 1', () => { pm.expect(j.data.sectionType).to.eql('images'); pm.expect(j.data.revision).to.eql(1); pm.expect(j.data.schemaVersion).to.eql(1); });",
+                  "pm.test('content round-trips', () => pm.expect(j.data.content).to.eql({\"heading\":\"Gallery\",\"items\":[{\"itemKey\":\"img-1\",\"mediaId\":\"90003\",\"alt\":\"Our office\",\"title\":\"Office\",\"caption\":\"Where we work\"}]}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST create testimonials content",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"testimonials\",\n  \"content\": {\n    \"heading\": \"Loved by teams\",\n    \"items\": [\n      {\n        \"itemKey\": \"t-1\",\n        \"quote\": \"It just works.\",\n        \"author\": \"Asha Rao\",\n        \"role\": \"CTO\",\n        \"company\": \"Acme\",\n        \"avatarMediaId\": \"90004\"\n      }\n    ]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{testimonialsSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{testimonialsSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test('envelope success=true with requestId', () => { pm.expect(j.success).to.eql(true); pm.expect(j.meta.requestId).to.eql(pm.environment.get('requestId')); });",
+                  "pm.test('testimonials stored at revision 1', () => { pm.expect(j.data.sectionType).to.eql('testimonials'); pm.expect(j.data.revision).to.eql(1); pm.expect(j.data.schemaVersion).to.eql(1); });",
+                  "pm.test('content round-trips', () => pm.expect(j.data.content).to.eql({\"heading\":\"Loved by teams\",\"items\":[{\"itemKey\":\"t-1\",\"quote\":\"It just works.\",\"author\":\"Asha Rao\",\"role\":\"CTO\",\"company\":\"Acme\",\"avatarMediaId\":\"90004\"}]}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST create pricing content",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"pricing\",\n  \"content\": {\n    \"heading\": \"Pricing\",\n    \"plans\": [\n      {\n        \"itemKey\": \"plan-basic\",\n        \"name\": \"Basic\",\n        \"displayPrice\": \"9\",\n        \"currency\": \"USD\",\n        \"billingLabel\": \"per month\",\n        \"description\": \"For individuals\",\n        \"features\": [\n          \"1 site\",\n          \"Email support\"\n        ],\n        \"button\": {\n          \"label\": \"Choose Basic\",\n          \"url\": \"/signup?plan=basic\"\n        }\n      }\n    ]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{pricingSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{pricingSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test('envelope success=true with requestId', () => { pm.expect(j.success).to.eql(true); pm.expect(j.meta.requestId).to.eql(pm.environment.get('requestId')); });",
+                  "pm.test('pricing stored at revision 1', () => { pm.expect(j.data.sectionType).to.eql('pricing'); pm.expect(j.data.revision).to.eql(1); pm.expect(j.data.schemaVersion).to.eql(1); });",
+                  "pm.test('content round-trips', () => pm.expect(j.data.content).to.eql({\"heading\":\"Pricing\",\"plans\":[{\"itemKey\":\"plan-basic\",\"name\":\"Basic\",\"displayPrice\":\"9\",\"currency\":\"USD\",\"billingLabel\":\"per month\",\"description\":\"For individuals\",\"features\":[\"1 site\",\"Email support\"],\"button\":{\"label\":\"Choose Basic\",\"url\":\"/signup?plan=basic\"}}]}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST create faq content",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"faq\",\n  \"content\": {\n    \"heading\": \"Frequently Asked Questions\",\n    \"items\": [\n      {\n        \"itemKey\": \"faq-1\",\n        \"question\": \"Can I edit this later?\",\n        \"answer\": \"Yes, you can update the content anytime.\"\n      }\n    ]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{faqSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{faqSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test('envelope success=true with requestId', () => { pm.expect(j.success).to.eql(true); pm.expect(j.meta.requestId).to.eql(pm.environment.get('requestId')); });",
+                  "pm.test('faq stored at revision 1', () => { pm.expect(j.data.sectionType).to.eql('faq'); pm.expect(j.data.revision).to.eql(1); pm.expect(j.data.schemaVersion).to.eql(1); });",
+                  "pm.test('content round-trips', () => pm.expect(j.data.content).to.eql({\"heading\":\"Frequently Asked Questions\",\"items\":[{\"itemKey\":\"faq-1\",\"question\":\"Can I edit this later?\",\"answer\":\"Yes, you can update the content anytime.\"}]}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST create cta content",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"cta\",\n  \"content\": {\n    \"heading\": \"Ready to start?\",\n    \"description\": \"Launch your site today.\",\n    \"primaryButton\": {\n      \"label\": \"Start free\",\n      \"url\": \"https://example.com/start\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{ctaSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{ctaSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test('envelope success=true with requestId', () => { pm.expect(j.success).to.eql(true); pm.expect(j.meta.requestId).to.eql(pm.environment.get('requestId')); });",
+                  "pm.test('cta stored at revision 1', () => { pm.expect(j.data.sectionType).to.eql('cta'); pm.expect(j.data.revision).to.eql(1); pm.expect(j.data.schemaVersion).to.eql(1); });",
+                  "pm.test('content round-trips', () => pm.expect(j.data.content).to.eql({\"heading\":\"Ready to start?\",\"description\":\"Launch your site today.\",\"primaryButton\":{\"label\":\"Start free\",\"url\":\"https://example.com/start\"}}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST create form content",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"form\",\n  \"content\": {\n    \"heading\": \"Contact us\",\n    \"description\": \"We reply within one business day.\",\n    \"helperText\": \"We never share your email.\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{formSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{formSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test('envelope success=true with requestId', () => { pm.expect(j.success).to.eql(true); pm.expect(j.meta.requestId).to.eql(pm.environment.get('requestId')); });",
+                  "pm.test('form stored at revision 1', () => { pm.expect(j.data.sectionType).to.eql('form'); pm.expect(j.data.revision).to.eql(1); pm.expect(j.data.schemaVersion).to.eql(1); });",
+                  "pm.test('content round-trips', () => pm.expect(j.data.content).to.eql({\"heading\":\"Contact us\",\"description\":\"We reply within one business day.\",\"helperText\":\"We never share your email.\"}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET page-level check: Hero stays Hero",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('section types are not mixed', () => pm.expect(pm.response.json().data.sectionType).to.eql('hero'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Bulk Page Content",
+      "item": [
+        {
+          "name": "GET bulk page content",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('envelope success=true with requestId', () => { pm.expect(j.success).to.eql(true); pm.expect(j.meta.requestId).to.eql(pm.environment.get('requestId')); });",
+                  "pm.test('8 section contents keyed by sectionId', () => { pm.expect(j.data.count).to.eql(8); pm.expect(Object.keys(j.data.contents)).to.have.lengthOf(8); pm.expect(j.data.contents[pm.environment.get('sectionId')].sectionType).to.eql('hero'); });",
+                  "pm.test('items list matches', () => pm.expect(j.data.items).to.have.lengthOf(8));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET bulk for page with no content",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/999999999/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "999999999",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('empty', () => { const d = pm.response.json().data; pm.expect(d.count).to.eql(0); pm.expect(d.items).to.eql([]); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Autosave & Concurrency",
+      "item": [
+        {
+          "name": "PATCH autosave with current revision",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": {{currentRevision}},\n  \"content\": { \"heading\": \"Autosaved Heading\" }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('envelope success=true with requestId', () => { pm.expect(j.success).to.eql(true); pm.expect(j.meta.requestId).to.eql(pm.environment.get('requestId')); });",
+                  "pm.test('saved and revision bumped', () => { pm.expect(j.data.content.heading).to.eql('Autosaved Heading'); pm.expect(j.data.revision).to.eql(Number(pm.environment.get('currentRevision')) + 1); });",
+                  "pm.environment.set('currentRevision', j.data.revision);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH stale expectedRevision -> 409",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": {{staleRevision}},\n  \"content\": { \"heading\": \"Stale overwrite attempt\" }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set('staleRevision', Number(pm.environment.get('currentRevision')) - 1);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 409', () => pm.response.to.have.status(409));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code CONTENT_REVISION_CONFLICT', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('CONTENT_REVISION_CONFLICT'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });",
+                  "pm.test('reports current revision', () => pm.expect(j.error.details.currentRevision).to.eql(Number(pm.environment.get('currentRevision'))));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET confirms stale write did not overwrite",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('envelope success=true with requestId', () => { pm.expect(j.success).to.eql(true); pm.expect(j.meta.requestId).to.eql(pm.environment.get('requestId')); });",
+                  "pm.test('no data loss', () => { pm.expect(j.data.content.heading).to.eql('Autosaved Heading'); pm.expect(j.data.revision).to.eql(Number(pm.environment.get('currentRevision'))); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT with future revision -> 409",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": 9999,\n  \"content\": {\n    \"heading\": \"Build Websites\",\n    \"subheading\": \"Fast and flexible\",\n    \"description\": \"Create professional pages without writing code.\",\n    \"mediaId\": \"90001\",\n    \"primaryButton\": {\n      \"label\": \"Get Started\",\n      \"url\": \"/signup\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 409', () => pm.response.to.have.status(409));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code CONTENT_REVISION_CONFLICT', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('CONTENT_REVISION_CONFLICT'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH a different section is independent (FAQ at its own revision)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": 1,\n  \"content\": {\n    \"heading\": \"FAQ edited independently\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{faqSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{faqSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('envelope success=true with requestId', () => { pm.expect(j.success).to.eql(true); pm.expect(j.meta.requestId).to.eql(pm.environment.get('requestId')); });",
+                  "pm.test('FAQ revision 2 while Hero is higher', () => { pm.expect(j.data.revision).to.eql(2); pm.expect(j.data.content.items).to.have.lengthOf(1); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Revisions & Restore",
+      "item": [
+        {
+          "name": "GET revision history",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content/revisions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content",
+                "revisions"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('envelope success=true with requestId', () => { pm.expect(j.success).to.eql(true); pm.expect(j.meta.requestId).to.eql(pm.environment.get('requestId')); });",
+                  "const cur = Number(pm.environment.get('currentRevision'));",
+                  "pm.test('one snapshot per mutation, newest first', () => { pm.expect(j.data.items).to.have.lengthOf(cur); pm.expect(j.data.items[0].revision).to.eql(cur); pm.expect(j.data.items[cur - 1].revision).to.eql(1); pm.expect(j.data.pagination.total).to.eql(cur); });",
+                  "pm.test('metadata only (no snapshot bodies)', () => pm.expect(j.data.items[0]).to.not.have.property('snapshot'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET revision history paginated",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content/revisions?limit=2&offset=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content",
+                "revisions"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "2"
+                },
+                {
+                  "key": "offset",
+                  "value": "1"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('envelope success=true with requestId', () => { pm.expect(j.success).to.eql(true); pm.expect(j.meta.requestId).to.eql(pm.environment.get('requestId')); });",
+                  "pm.test('page of 2', () => { pm.expect(j.data.items).to.have.lengthOf(2); pm.expect(j.data.pagination.limit).to.eql(2); pm.expect(j.data.pagination.offset).to.eql(1); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET revision history invalid limit -> 400",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content/revisions?limit=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content",
+                "revisions"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "0"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code BAD_REQUEST', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('BAD_REQUEST'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST restore revision 1 as new revision",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": {{currentRevision}}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content/revisions/1/restore",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content",
+                "revisions",
+                "1",
+                "restore"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('envelope success=true with requestId', () => { pm.expect(j.success).to.eql(true); pm.expect(j.meta.requestId).to.eql(pm.environment.get('requestId')); });",
+                  "pm.test('old content restored as NEW revision', () => { pm.expect(j.data.content.heading).to.eql('Build Websites'); pm.expect(j.data.revision).to.eql(Number(pm.environment.get('currentRevision')) + 1); });",
+                  "pm.environment.set('currentRevision', j.data.revision);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET history grew; nothing rewritten",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content/revisions?limit=100",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content",
+                "revisions"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('envelope success=true with requestId', () => { pm.expect(j.success).to.eql(true); pm.expect(j.meta.requestId).to.eql(pm.environment.get('requestId')); });",
+                  "const cur = Number(pm.environment.get('currentRevision'));",
+                  "pm.test('history appended', () => { pm.expect(j.data.pagination.total).to.eql(cur); pm.expect(j.data.items.map(i => i.revision)).to.eql(Array.from({ length: cur }, (_, i) => cur - i)); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST restore with stale expectedRevision -> 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content/revisions/2/restore",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content",
+                "revisions",
+                "2",
+                "restore"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 409', () => pm.response.to.have.status(409));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code CONTENT_REVISION_CONFLICT', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('CONTENT_REVISION_CONFLICT'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST restore unknown revision -> 404",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": {{currentRevision}}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content/revisions/9999/restore",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content",
+                "revisions",
+                "9999",
+                "restore"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404', () => pm.response.to.have.status(404));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code REVISION_NOT_FOUND', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('REVISION_NOT_FOUND'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST restore invalid revision number -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": {{currentRevision}}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content/revisions/abc/restore",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content",
+                "revisions",
+                "abc",
+                "restore"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code BAD_REQUEST', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('BAD_REQUEST'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET history for section without content -> 404",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{missingSectionId}}/content/revisions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{missingSectionId}}",
+                "content",
+                "revisions"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404', () => pm.response.to.have.status(404));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code CONTENT_NOT_FOUND', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('CONTENT_NOT_FOUND'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Duplication (internal)",
+      "item": [
+        {
+          "name": "POST duplicate content to new section",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Service-Token",
+                "value": "{{internalServiceToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mappings\": [\n    {\n      \"sourceSectionId\": \"{{sectionId}}\",\n      \"targetSectionId\": \"{{dupTargetSectionId}}\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/internal/content/duplicate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "internal",
+                "content",
+                "duplicate"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test('envelope success=true with requestId', () => { pm.expect(j.success).to.eql(true); pm.expect(j.meta.requestId).to.eql(pm.environment.get('requestId')); });",
+                  "const d = j.data.items[0];",
+                  "pm.test('independent new row at revision 1', () => { pm.expect(j.data.count).to.eql(1); pm.expect(d.id).to.not.eql(pm.environment.get('contentId')); pm.expect(d.revision).to.eql(1); pm.expect(d.sectionId).to.eql(pm.environment.get('dupTargetSectionId')); pm.expect(d.sourceSectionId).to.eql(pm.environment.get('sectionId')); });",
+                  "pm.test('content copied', () => pm.expect(d.content.heading).to.eql('Build Websites'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH duplicate does not touch source",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": 1,\n  \"content\": {\n    \"heading\": \"Only the copy changed\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{dupTargetSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{dupTargetSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('envelope success=true with requestId', () => { pm.expect(j.success).to.eql(true); pm.expect(j.meta.requestId).to.eql(pm.environment.get('requestId')); });",
+                  "pm.test('copy at revision 2', () => pm.expect(j.data.revision).to.eql(2));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET source unchanged after copy edit",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('envelope success=true with requestId', () => { pm.expect(j.success).to.eql(true); pm.expect(j.meta.requestId).to.eql(pm.environment.get('requestId')); });",
+                  "pm.test('source heading + revision intact', () => { pm.expect(j.data.content.heading).to.eql('Build Websites'); pm.expect(j.data.revision).to.eql(Number(pm.environment.get('currentRevision'))); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST duplicate again -> 409 already exists",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Service-Token",
+                "value": "{{internalServiceToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mappings\": [\n    {\n      \"sourceSectionId\": \"{{sectionId}}\",\n      \"targetSectionId\": \"{{dupTargetSectionId}}\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/internal/content/duplicate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "internal",
+                "content",
+                "duplicate"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 409', () => pm.response.to.have.status(409));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code CONTENT_ALREADY_EXISTS', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('CONTENT_ALREADY_EXISTS'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST duplicate missing source -> 404",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Service-Token",
+                "value": "{{internalServiceToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mappings\": [\n    {\n      \"sourceSectionId\": \"{{missingSectionId}}\",\n      \"targetSectionId\": \"{{missingSectionId}}1\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/internal/content/duplicate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "internal",
+                "content",
+                "duplicate"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404', () => pm.response.to.have.status(404));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code CONTENT_NOT_FOUND', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('CONTENT_NOT_FOUND'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST duplicate source == target -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Service-Token",
+                "value": "{{internalServiceToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mappings\": [\n    {\n      \"sourceSectionId\": \"{{sectionId}}\",\n      \"targetSectionId\": \"{{sectionId}}\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/internal/content/duplicate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "internal",
+                "content",
+                "duplicate"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code BAD_REQUEST', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('BAD_REQUEST'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST duplicate without internal token -> 401",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mappings\": [\n    {\n      \"sourceSectionId\": \"{{sectionId}}\",\n      \"targetSectionId\": \"{{missingSectionId}}\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/internal/content/duplicate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "internal",
+                "content",
+                "duplicate"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code AUTHORIZATION_REQUIRED', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('AUTHORIZATION_REQUIRED'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST duplicate with wrong internal token -> 401",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Service-Token",
+                "value": "wrong-token"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mappings\": [\n    {\n      \"sourceSectionId\": \"{{sectionId}}\",\n      \"targetSectionId\": \"{{missingSectionId}}\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/internal/content/duplicate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "internal",
+                "content",
+                "duplicate"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code INVALID_TOKEN', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('INVALID_TOKEN'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Authorization & Workspace Isolation",
+      "item": [
+        {
+          "name": "GET without Authorization -> 401",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code AUTHORIZATION_REQUIRED', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('AUTHORIZATION_REQUIRED'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET with invalid token -> 401",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer not.a.valid.jwt"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code INVALID_TOKEN', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('INVALID_TOKEN'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET with malformed Authorization scheme -> 401",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Basic abc123"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code INVALID_TOKEN', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('INVALID_TOKEN'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET without X-Workspace-Id -> 400",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code WORKSPACE_REQUIRED', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('WORKSPACE_REQUIRED'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET with non-numeric X-Workspace-Id -> 400",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "abc"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code BAD_REQUEST', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('BAD_REQUEST'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET workspace the actor is not a member of -> 403",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{outsiderToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 403', () => pm.response.to.have.status(403));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code FORBIDDEN', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('FORBIDDEN'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET as read-only viewer -> 200",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{viewerToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('envelope success=true with requestId', () => { pm.expect(j.success).to.eql(true); pm.expect(j.meta.requestId).to.eql(pm.environment.get('requestId')); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH as read-only viewer -> 403",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{viewerToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": {{currentRevision}},\n  \"content\": { \"heading\": \"viewer edit\" }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 403', () => pm.response.to.have.status(403));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code FORBIDDEN', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('FORBIDDEN'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE as read-only viewer -> 403",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{viewerToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 403', () => pm.response.to.have.status(403));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code FORBIDDEN', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('FORBIDDEN'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST restore as read-only viewer -> 403",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{viewerToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content/revisions/1/restore",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content",
+                "revisions",
+                "1",
+                "restore"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 403', () => pm.response.to.have.status(403));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code FORBIDDEN', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('FORBIDDEN'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET content of workspace 1001 from workspace 1002 -> 404 (not exposed)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{otherWorkspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404', () => pm.response.to.have.status(404));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code CONTENT_NOT_FOUND', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('CONTENT_NOT_FOUND'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT content of workspace 1001 from workspace 1002 -> 404",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{otherWorkspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": 1,\n  \"content\": {\n    \"heading\": \"Build Websites\",\n    \"subheading\": \"Fast and flexible\",\n    \"description\": \"Create professional pages without writing code.\",\n    \"mediaId\": \"90001\",\n    \"primaryButton\": {\n      \"label\": \"Get Started\",\n      \"url\": \"/signup\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404', () => pm.response.to.have.status(404));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code CONTENT_NOT_FOUND', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('CONTENT_NOT_FOUND'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE content of workspace 1001 from workspace 1002 -> 404",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{otherWorkspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404', () => pm.response.to.have.status(404));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code CONTENT_NOT_FOUND', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('CONTENT_NOT_FOUND'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET revisions of workspace 1001 from workspace 1002 -> 404",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{otherWorkspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content/revisions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content",
+                "revisions"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404', () => pm.response.to.have.status(404));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code CONTENT_NOT_FOUND', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('CONTENT_NOT_FOUND'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET bulk page of workspace 1001 from workspace 1002 -> empty",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{otherWorkspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('no cross-workspace leak', () => pm.expect(pm.response.json().data.count).to.eql(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST workspaceId in body is ignored as proof of ownership",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{outsiderToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"hero\",\n  \"content\": {\n    \"heading\": \"Build Websites\",\n    \"subheading\": \"Fast and flexible\",\n    \"description\": \"Create professional pages without writing code.\",\n    \"mediaId\": \"90001\",\n    \"primaryButton\": {\n      \"label\": \"Get Started\",\n      \"url\": \"/signup\"\n    }\n  },\n  \"workspaceId\": \"1001\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{missingSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{missingSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 403', () => pm.response.to.have.status(403));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code FORBIDDEN', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('FORBIDDEN'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validation & Security",
+      "item": [
+        {
+          "name": "POST javascript: link -> 422 INVALID_LINK",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"hero\",\n  \"content\": {\n    \"heading\": \"Hi\",\n    \"primaryButton\": {\n      \"label\": \"Go\",\n      \"url\": \"javascript:alert(1)\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{missingSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{missingSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 422', () => pm.response.to.have.status(422));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code INVALID_LINK', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('INVALID_LINK'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST data: link -> 422 INVALID_LINK",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"cta\",\n  \"content\": {\n    \"heading\": \"Hi\",\n    \"primaryButton\": {\n      \"label\": \"Go\",\n      \"url\": \"data:text/html,<script>alert(1)</script>\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{missingSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{missingSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 422', () => pm.response.to.have.status(422));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code INVALID_LINK', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('INVALID_LINK'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST protocol-relative link -> 422 INVALID_LINK",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"cta\",\n  \"content\": {\n    \"heading\": \"Hi\",\n    \"primaryButton\": {\n      \"label\": \"Go\",\n      \"url\": \"//evil.example.com\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{missingSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{missingSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 422', () => pm.response.to.have.status(422));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code INVALID_LINK', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('INVALID_LINK'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST http:// (non-https) link -> 422 INVALID_LINK",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"cta\",\n  \"content\": {\n    \"heading\": \"Hi\",\n    \"primaryButton\": {\n      \"label\": \"Go\",\n      \"url\": \"http://example.com\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{missingSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{missingSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 422', () => pm.response.to.have.status(422));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code INVALID_LINK', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('INVALID_LINK'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST script tag in text -> 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"hero\",\n  \"content\": {\n    \"heading\": \"<script>alert(1)</script>\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{missingSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{missingSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 422', () => pm.response.to.have.status(422));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code CONTENT_SCHEMA_INVALID', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('CONTENT_SCHEMA_INVALID'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST inline HTML in description -> 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"faq\",\n  \"content\": {\n    \"heading\": \"FAQ\",\n    \"items\": [\n      {\n        \"itemKey\": \"a\",\n        \"question\": \"Q?\",\n        \"answer\": \"<img src=x onerror=alert(1)>\"\n      }\n    ]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{missingSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{missingSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 422', () => pm.response.to.have.status(422));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code CONTENT_SCHEMA_INVALID', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('CONTENT_SCHEMA_INVALID'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST unknown content key -> 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"hero\",\n  \"content\": {\n    \"heading\": \"Hi\",\n    \"extra\": \"nope\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{missingSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{missingSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 422', () => pm.response.to.have.status(422));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code CONTENT_SCHEMA_INVALID', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('CONTENT_SCHEMA_INVALID'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST whitespace-only heading -> 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"hero\",\n  \"content\": {\n    \"heading\": \"    \"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{missingSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{missingSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 422', () => pm.response.to.have.status(422));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code CONTENT_SCHEMA_INVALID', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('CONTENT_SCHEMA_INVALID'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST missing required heading -> 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"hero\",\n  \"content\": {\n    \"subheading\": \"no heading\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{missingSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{missingSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 422', () => pm.response.to.have.status(422));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code CONTENT_SCHEMA_INVALID', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('CONTENT_SCHEMA_INVALID'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST heading too long -> 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"hero\",\n  \"content\": {\n    \"heading\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{missingSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{missingSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 422', () => pm.response.to.have.status(422));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code CONTENT_SCHEMA_INVALID', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('CONTENT_SCHEMA_INVALID'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST invalid mediaId -> 422 INVALID_MEDIA_REFERENCE",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"hero\",\n  \"content\": {\n    \"heading\": \"Hi\",\n    \"mediaId\": \"abc\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{missingSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{missingSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 422', () => pm.response.to.have.status(422));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code INVALID_MEDIA_REFERENCE', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('INVALID_MEDIA_REFERENCE'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST duplicate itemKey -> 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"faq\",\n  \"content\": {\n    \"heading\": \"FAQ\",\n    \"items\": [\n      {\n        \"itemKey\": \"same\",\n        \"question\": \"A?\",\n        \"answer\": \"a\"\n      },\n      {\n        \"itemKey\": \"same\",\n        \"question\": \"B?\",\n        \"answer\": \"b\"\n      }\n    ]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{missingSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{missingSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 422', () => pm.response.to.have.status(422));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code CONTENT_SCHEMA_INVALID', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('CONTENT_SCHEMA_INVALID'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST missing itemKey -> 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"faq\",\n  \"content\": {\n    \"heading\": \"FAQ\",\n    \"items\": [\n      {\n        \"question\": \"A?\",\n        \"answer\": \"a\"\n      }\n    ]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{missingSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{missingSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 422', () => pm.response.to.have.status(422));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code CONTENT_SCHEMA_INVALID', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('CONTENT_SCHEMA_INVALID'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST unsupported sectionType -> 422 SECTION_TYPE_MISMATCH",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"carousel\",\n  \"content\": {\n    \"heading\": \"Hi\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{missingSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{missingSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 422', () => pm.response.to.have.status(422));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code SECTION_TYPE_MISMATCH', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('SECTION_TYPE_MISMATCH'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST sectionType does not match content shape -> 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"faq\",\n  \"content\": {\n    \"heading\": \"Build Websites\",\n    \"subheading\": \"Fast and flexible\",\n    \"description\": \"Create professional pages without writing code.\",\n    \"mediaId\": \"90001\",\n    \"primaryButton\": {\n      \"label\": \"Get Started\",\n      \"url\": \"/signup\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{missingSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{missingSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 422', () => pm.response.to.have.status(422));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code CONTENT_SCHEMA_INVALID', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('CONTENT_SCHEMA_INVALID'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST unsupported schemaVersion -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"hero\",\n  \"content\": {\n    \"heading\": \"Build Websites\",\n    \"subheading\": \"Fast and flexible\",\n    \"description\": \"Create professional pages without writing code.\",\n    \"mediaId\": \"90001\",\n    \"primaryButton\": {\n      \"label\": \"Get Started\",\n      \"url\": \"/signup\"\n    }\n  },\n  \"schemaVersion\": 99\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{missingSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{missingSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code BAD_REQUEST', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('BAD_REQUEST'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST missing pageId -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sectionType\": \"hero\",\n  \"content\": {\n    \"heading\": \"Build Websites\",\n    \"subheading\": \"Fast and flexible\",\n    \"description\": \"Create professional pages without writing code.\",\n    \"mediaId\": \"90001\",\n    \"primaryButton\": {\n      \"label\": \"Get Started\",\n      \"url\": \"/signup\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{missingSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{missingSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code BAD_REQUEST', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('BAD_REQUEST'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST unknown top-level field -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"hero\",\n  \"content\": {\n    \"heading\": \"Build Websites\",\n    \"subheading\": \"Fast and flexible\",\n    \"description\": \"Create professional pages without writing code.\",\n    \"mediaId\": \"90001\",\n    \"primaryButton\": {\n      \"label\": \"Get Started\",\n      \"url\": \"/signup\"\n    }\n  },\n  \"admin\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{missingSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{missingSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code BAD_REQUEST', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('BAD_REQUEST'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST content is an array -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"hero\",\n  \"content\": []\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{missingSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{missingSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code BAD_REQUEST', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('BAD_REQUEST'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST invalid sectionId in path -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"hero\",\n  \"content\": {\n    \"heading\": \"Build Websites\",\n    \"subheading\": \"Fast and flexible\",\n    \"description\": \"Create professional pages without writing code.\",\n    \"mediaId\": \"90001\",\n    \"primaryButton\": {\n      \"label\": \"Get Started\",\n      \"url\": \"/signup\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/1;DROP/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "1;DROP",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code BAD_REQUEST', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('BAD_REQUEST'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET sectionId zero -> 400",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/0/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "0",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code BAD_REQUEST', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('BAD_REQUEST'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET sectionId beyond BIGINT -> 400",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/9223372036854775808/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "9223372036854775808",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code BAD_REQUEST', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('BAD_REQUEST'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT missing expectedRevision -> 400",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": {\n    \"heading\": \"Build Websites\",\n    \"subheading\": \"Fast and flexible\",\n    \"description\": \"Create professional pages without writing code.\",\n    \"mediaId\": \"90001\",\n    \"primaryButton\": {\n      \"label\": \"Get Started\",\n      \"url\": \"/signup\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code BAD_REQUEST', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('BAD_REQUEST'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT expectedRevision as string -> 400",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": \"1\",\n  \"content\": {\n    \"heading\": \"Build Websites\",\n    \"subheading\": \"Fast and flexible\",\n    \"description\": \"Create professional pages without writing code.\",\n    \"mediaId\": \"90001\",\n    \"primaryButton\": {\n      \"label\": \"Get Started\",\n      \"url\": \"/signup\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code BAD_REQUEST', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('BAD_REQUEST'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT expectedRevision 0 -> 400",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": 0,\n  \"content\": {\n    \"heading\": \"Build Websites\",\n    \"subheading\": \"Fast and flexible\",\n    \"description\": \"Create professional pages without writing code.\",\n    \"mediaId\": \"90001\",\n    \"primaryButton\": {\n      \"label\": \"Get Started\",\n      \"url\": \"/signup\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code BAD_REQUEST', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('BAD_REQUEST'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH producing invalid final document -> 422",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": {{currentRevision}},\n  \"content\": { \"heading\": null }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 422', () => pm.response.to.have.status(422));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code CONTENT_SCHEMA_INVALID', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('CONTENT_SCHEMA_INVALID'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH with javascript: link -> 422",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": {{currentRevision}},\n  \"content\": { \"primaryButton\": { \"url\": \"javascript:alert(1)\" } }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 422', () => pm.response.to.have.status(422));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code INVALID_LINK', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('INVALID_LINK'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH __proto__ pollution attempt is harmless",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": {{currentRevision}},\n  \"content\": { \"__proto__\": { \"polluted\": true }, \"constructor\": { \"x\": 1 } }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('did not pollute / no stray keys stored', () => { const c = pm.response.json().data.content; pm.expect(Object.keys(c).sort()).to.eql(['description', 'heading', 'mediaId', 'primaryButton', 'subheading']); pm.expect(({}).polluted).to.eql(undefined); });",
+                  "pm.environment.set('currentRevision', pm.response.json().data.revision);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST oversized payload -> 413",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{missingSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{missingSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.body.raw = JSON.stringify({ pageId: pm.environment.get('pageId'), sectionType: 'hero', content: { heading: 'x'.repeat(700 * 1024) } });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 413', () => pm.response.to.have.status(413));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code CONTENT_PAYLOAD_TOO_LARGE', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('CONTENT_PAYLOAD_TOO_LARGE'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST invalid JSON -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"pageId\": "
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{missingSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{missingSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code BAD_REQUEST', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('BAD_REQUEST'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST text/plain body -> 415",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "text/plain"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "heading=hi"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{missingSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{missingSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 415', () => pm.response.to.have.status(415));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code UNSUPPORTED_MEDIA_TYPE', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('UNSUPPORTED_MEDIA_TYPE'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST content that already exists -> 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"hero\",\n  \"content\": {\n    \"heading\": \"Build Websites\",\n    \"subheading\": \"Fast and flexible\",\n    \"description\": \"Create professional pages without writing code.\",\n    \"mediaId\": \"90001\",\n    \"primaryButton\": {\n      \"label\": \"Get Started\",\n      \"url\": \"/signup\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 409', () => pm.response.to.have.status(409));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code CONTENT_ALREADY_EXISTS', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('CONTENT_ALREADY_EXISTS'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Response carries security headers and X-Request-Id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{sectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{sectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('helmet headers present, x-powered-by absent', () => { pm.expect(pm.response.headers.get('X-Content-Type-Options')).to.eql('nosniff'); pm.expect(pm.response.headers.has('X-Powered-By')).to.eql(false); });",
+                  "pm.test('X-Request-Id propagated', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.eql(pm.environment.get('requestId')));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Soft Delete",
+      "item": [
+        {
+          "name": "POST create content to delete",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"cta\",\n  \"content\": {\n    \"heading\": \"Ready to start?\",\n    \"description\": \"Launch your site today.\",\n    \"primaryButton\": {\n      \"label\": \"Start free\",\n      \"url\": \"https://example.com/start\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{deleteSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{deleteSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test('envelope success=true with requestId', () => { pm.expect(j.success).to.eql(true); pm.expect(j.meta.requestId).to.eql(pm.environment.get('requestId')); });",
+                  "pm.environment.set('deleteRevision', j.data.revision);",
+                  "pm.environment.set('deleteContentId', j.data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE with stale expectedRevision -> 409",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{deleteSectionId}}/content?expectedRevision=99",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{deleteSectionId}}",
+                "content"
+              ],
+              "query": [
+                {
+                  "key": "expectedRevision",
+                  "value": "99"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 409', () => pm.response.to.have.status(409));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code CONTENT_REVISION_CONFLICT', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('CONTENT_REVISION_CONFLICT'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE with invalid expectedRevision -> 400",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{deleteSectionId}}/content?expectedRevision=abc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{deleteSectionId}}",
+                "content"
+              ],
+              "query": [
+                {
+                  "key": "expectedRevision",
+                  "value": "abc"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code BAD_REQUEST', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('BAD_REQUEST'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE soft-deletes content",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{deleteSectionId}}/content?expectedRevision={{deleteRevision}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{deleteSectionId}}",
+                "content"
+              ],
+              "query": [
+                {
+                  "key": "expectedRevision",
+                  "value": "{{deleteRevision}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('envelope success=true with requestId', () => { pm.expect(j.success).to.eql(true); pm.expect(j.meta.requestId).to.eql(pm.environment.get('requestId')); });",
+                  "pm.test('deleted flag', () => pm.expect(j.data.deleted).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET after delete -> 404",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{deleteSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{deleteSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404', () => pm.response.to.have.status(404));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code CONTENT_NOT_FOUND', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('CONTENT_NOT_FOUND'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE again -> 404",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{deleteSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{deleteSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404', () => pm.response.to.have.status(404));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code CONTENT_NOT_FOUND', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('CONTENT_NOT_FOUND'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT after delete -> 404",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedRevision\": 1,\n  \"content\": {\n    \"heading\": \"Ready to start?\",\n    \"description\": \"Launch your site today.\",\n    \"primaryButton\": {\n      \"label\": \"Start free\",\n      \"url\": \"https://example.com/start\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{deleteSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{deleteSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404', () => pm.response.to.have.status(404));",
+                  "const j = pm.response.json();",
+                  "pm.test('error code CONTENT_NOT_FOUND', () => { pm.expect(j.success).to.eql(false); pm.expect(j.error.code).to.eql('CONTENT_NOT_FOUND'); });",
+                  "pm.test('error response leaks nothing', () => { pm.expect(JSON.stringify(j)).to.not.match(/stack|node_modules|SELECT |pg_|postgres/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET bulk page excludes deleted content",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pages/{{pageId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pages",
+                "{{pageId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('deleted row hidden', () => { const d = pm.response.json().data; pm.expect(d.count).to.eql(9); pm.expect(d.contents).to.not.have.property(pm.environment.get('deleteSectionId')); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST re-create after soft delete -> 201 (fresh revision 1)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}"
+              },
+              {
+                "key": "X-Workspace-Id",
+                "value": "{{workspaceId}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "{{requestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageId\": \"{{pageId}}\",\n  \"sectionType\": \"cta\",\n  \"content\": {\n    \"heading\": \"Ready to start?\",\n    \"description\": \"Launch your site today.\",\n    \"primaryButton\": {\n      \"label\": \"Start free\",\n      \"url\": \"https://example.com/start\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sections/{{deleteSectionId}}/content",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sections",
+                "{{deleteSectionId}}",
+                "content"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test('envelope success=true with requestId', () => { pm.expect(j.success).to.eql(true); pm.expect(j.meta.requestId).to.eql(pm.environment.get('requestId')); });",
+                  "pm.test('new independent row', () => { pm.expect(j.data.revision).to.eql(1); pm.expect(j.data.id).to.not.eql(pm.environment.get('deleteContentId')); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

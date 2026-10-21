@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: pagebuilder
+      POSTGRES_PASSWORD: pagebuilder_dev
+      POSTGRES_DB: page_builder
+    ports:
+      - "5434:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pagebuilder -d page_builder"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Optional containerised API: docker compose --profile full up -d --build
+  # (stop any host-run server on port 4070 first). Secrets come from your shell/.env, not this file.
+  api:
+    profiles: ["full"]
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4070
+      DATABASE_URL: postgresql://pagebuilder:pagebuilder_dev@db:5432/page_builder
+      AUTH_MODE: jwt
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+    ports:
+      - "4070:4070"
+    command: ["sh", "-c", "node scripts/migrate.js && node src/server.js"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4070/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  pgdata:

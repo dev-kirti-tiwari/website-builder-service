@@ -1,0 +1,37 @@
+﻿{
+  "name": "theme-api",
+  "version": "1.0.0",
+  "description": "Theme API - independent visual theme service for the Independent Website Builder",
+  "main": "src/server.js",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "migrate": "node src/migrate.js",
+    "token": "node scripts/make-token.js",
+    "postman:build": "node scripts/build-postman.js",
+    "postman:run": "newman run postman/Theme-API.postman_collection.json -e postman/Theme-API.local.postman_environment.json",
+    "test:unit": "node --test tests/unit/*.test.js",
+    "test:integration": "node --test --test-concurrency=1 tests/integration/*.test.js",
+    "test": "node --test --test-concurrency=1 tests/unit/*.test.js tests/integration/*.test.js"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.0.0",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.0.0",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.23.1",
+    "pino": "^10.4.0",
+    "pino-http": "^11.0.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "newman": "^6.2.3"
+  }
+}

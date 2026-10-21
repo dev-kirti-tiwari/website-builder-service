@@ -1,0 +1,93 @@
+openapi: 3.0.3
+info:
+  title: Page Builder API
+  version: 1.0.0
+  description: >
+    Structure and layout of landing pages. Content (text, prices, FAQ answers) is owned by the Content API.
+    All /api/v1 routes need Authorization: Bearer <jwt> (or X-Internal-Service-Token) and X-Workspace-Id.
+    BIGINT IDs are strings. Mutations accept optional expectedRevision (required for draft autosave);
+    a mismatch returns 409 REVISION_CONFLICT.
+servers:
+  - url: http://localhost:4070
+components:
+  securitySchemes:
+    bearer: { type: http, scheme: bearer, bearerFormat: JWT }
+    internal: { type: apiKey, in: header, name: X-Internal-Service-Token }
+  parameters:
+    Workspace: { name: X-Workspace-Id, in: header, required: true, schema: { type: string } }
+    PageId: { name: id, in: path, required: true, schema: { type: string } }
+    SectionId: { name: sectionId, in: path, required: true, schema: { type: string } }
+  schemas:
+    Error:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        error:
+          type: object
+          properties:
+            code: { type: string, example: REVISION_CONFLICT }
+            message: { type: string }
+            details: { type: array, items: { type: object } }
+        meta: { type: object, properties: { requestId: { type: string } } }
+    Envelope:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data: {}
+        meta: { type: object }
+security:
+  - bearer: []
+  - internal: []
+paths:
+  /health: { get: { summary: Liveness, security: [], responses: { '200': { description: OK } } } }
+  /ready: { get: { summary: Readiness (checks PostgreSQL), security: [], responses: { '200': { description: Ready }, '503': { description: Not ready } } } }
+  /api/v1/section-types:
+    get: { summary: List section types, variants and defaults, responses: { '200': { description: OK } } }
+  /api/v1/pages:
+    parameters: [ { $ref: '#/components/parameters/Workspace' } ]
+    post:
+      summary: Create page
+      requestBody: { content: { application/json: { schema: { type: object, required: [name, slug], properties: { name: { type: string, maxLength: 180 }, slug: { type: string, maxLength: 200 } } } } } }
+      responses: { '201': { description: Created }, '409': { description: SLUG_CONFLICT }, '422': { description: VALIDATION_ERROR } }
+    get:
+      summary: List pages (page, limit, q, status, sort=created_at|updated_at|name, order)
+      responses: { '200': { description: OK, with meta.pagination } }
+  /api/v1/pages/{id}:
+    parameters: [ { $ref: '#/components/parameters/Workspace' }, { $ref: '#/components/parameters/PageId' } ]
+    get: { summary: Get page (?include=structure), responses: { '200': { description: OK }, '404': { description: PAGE_NOT_FOUND } } }
+    patch: { summary: Update name, slug or status (status is metadata only; publishing is a separate service), responses: { '200': { description: OK } } }
+    delete: { summary: Soft-delete (admin), responses: { '200': { description: OK } } }
+  /api/v1/pages/{id}/duplicate:
+    parameters: [ { $ref: '#/components/parameters/Workspace' }, { $ref: '#/components/parameters/PageId' } ]
+    post: { summary: Duplicate page structure (not content), responses: { '201': { description: Created } } }
+  /api/v1/pages/{id}/sections:
+    parameters: [ { $ref: '#/components/parameters/Workspace' }, { $ref: '#/components/parameters/PageId' } ]
+    post: { summary: 'Add section (type, variant, position, configuration, responsive, visible, contentRef, expectedRevision)', responses: { '201': { description: Created }, '422': { description: SECTION_CONFIG_INVALID } } }
+  /api/v1/pages/{id}/sections/order:
+    parameters: [ { $ref: '#/components/parameters/Workspace' }, { $ref: '#/components/parameters/PageId' } ]
+    put: { summary: 'Reorder. Body sectionIds must be the COMPLETE ordered list.', responses: { '200': { description: OK } } }
+  /api/v1/pages/{id}/sections/{sectionId}:
+    parameters: [ { $ref: '#/components/parameters/Workspace' }, { $ref: '#/components/parameters/PageId' }, { $ref: '#/components/parameters/SectionId' } ]
+    patch: { summary: 'Merge-patch variant/visible/configuration/responsive/contentRef; null removes a key', responses: { '200': { description: OK } } }
+    delete: { summary: Remove section (hard delete; positions renumbered), responses: { '200': { description: OK } } }
+  /api/v1/pages/{id}/sections/{sectionId}/duplicate:
+    parameters: [ { $ref: '#/components/parameters/Workspace' }, { $ref: '#/components/parameters/PageId' }, { $ref: '#/components/parameters/SectionId' } ]
+    post: { summary: Duplicate section directly after the original, responses: { '201': { description: Created } } }
+  /api/v1/pages/{id}/layout:
+    parameters: [ { $ref: '#/components/parameters/Workspace' }, { $ref: '#/components/parameters/PageId' } ]
+    patch: { summary: Update page-level layout/responsive, responses: { '200': { description: OK } } }
+  /api/v1/pages/{id}/draft:
+    parameters: [ { $ref: '#/components/parameters/Workspace' }, { $ref: '#/components/parameters/PageId' } ]
+    get: { summary: Draft structure, responses: { '200': { description: OK } } }
+    patch:
+      summary: 'Autosave patch list: {expectedRevision, changes:{layout?, sections:[{id, position?, ...fields}]}}'
+      responses: { '200': { description: Returns new revision }, '409': { description: REVISION_CONFLICT } }
+  /api/v1/pages/{id}/revisions:
+    parameters: [ { $ref: '#/components/parameters/Workspace' }, { $ref: '#/components/parameters/PageId' } ]
+    get: { summary: Revision history (page, limit), responses: { '200': { description: OK } } }
+  /api/v1/pages/{id}/revisions/{revision}/restore:
+    parameters: [ { $ref: '#/components/parameters/Workspace' }, { $ref: '#/components/parameters/PageId' }, { name: revision, in: path, required: true, schema: { type: integer } } ]
+    post: { summary: Restore structure as a NEW revision, responses: { '200': { description: OK }, '404': { description: REVISION_NOT_FOUND } } }
+  /api/v1/pages/{id}/preview:
+    parameters: [ { $ref: '#/components/parameters/Workspace' }, { $ref: '#/components/parameters/PageId' } ]
+    get: { summary: Ordered draft structure plus contentReferences for the BFF, responses: { '200': { description: OK } } }
