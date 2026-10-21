@@ -1,0 +1,323 @@
+openapi: 3.0.3
+info:
+  title: Content API Service
+  version: 2.0.0
+  description: >
+    Source of truth for the actual content inside Page Builder sections. Workspace is the isolation
+    boundary. BIGINT ids are serialized as strings. Every mutation requires `expectedRevision`.
+servers:
+  - url: http://localhost:4080
+security:
+  - bearerAuth: []
+tags:
+  - name: Content
+  - name: Revisions
+  - name: Internal
+  - name: Operations
+paths:
+  /api/v1/sections/{sectionId}/content:
+    parameters:
+      - $ref: '#/components/parameters/SectionId'
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/RequestId'
+    post:
+      tags: [Content]
+      summary: Create content for a section (permission content:edit)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateContent' }
+      responses:
+        '201': { $ref: '#/components/responses/ContentOk' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { description: CONTENT_ALREADY_EXISTS, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '413': { $ref: '#/components/responses/Error' }
+        '422': { description: 'CONTENT_SCHEMA_INVALID, SECTION_TYPE_MISMATCH, INVALID_LINK or INVALID_MEDIA_REFERENCE', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+    get:
+      tags: [Content]
+      summary: Get current non-deleted content (content:read)
+      responses:
+        '200': { $ref: '#/components/responses/ContentOk' }
+        '404': { $ref: '#/components/responses/Error' }
+    put:
+      tags: [Content]
+      summary: Replace the full content document (content:edit)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MutateContent' }
+      responses:
+        '200': { $ref: '#/components/responses/ContentOk' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { description: CONTENT_REVISION_CONFLICT (details.currentRevision), content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '422': { $ref: '#/components/responses/Error' }
+    patch:
+      tags: [Content]
+      summary: Partial update using JSON Merge Patch (RFC 7396) semantics (content:edit)
+      description: Objects merge recursively, arrays and scalars are replaced, `null` removes a key. The merged document is validated in full.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MutateContent' }
+      responses:
+        '200': { $ref: '#/components/responses/ContentOk' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+    delete:
+      tags: [Content]
+      summary: Soft-delete content (content:delete)
+      parameters:
+        - name: expectedRevision
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      sectionId: { type: string }
+                      deleted: { type: boolean }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/v1/pages/{pageId}/content:
+    get:
+      tags: [Content]
+      summary: Bulk fetch all non-deleted content for a page (content:read)
+      description: Only existing rows are returned; the BFF joins by sectionId.
+      parameters:
+        - { name: pageId, in: path, required: true, schema: { type: string } }
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Page content
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      pageId: { type: string }
+                      count: { type: integer }
+                      contents: { type: object, additionalProperties: { $ref: '#/components/schemas/Content' }, description: Keyed by sectionId }
+                      items: { type: array, items: { $ref: '#/components/schemas/Content' } }
+                  meta: { $ref: '#/components/schemas/Meta' }
+  /api/v1/sections/{sectionId}/content/revisions:
+    get:
+      tags: [Revisions]
+      summary: List revision metadata, newest first (content:read)
+      parameters:
+        - $ref: '#/components/parameters/SectionId'
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/RequestId'
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        '200':
+          description: Revision list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      currentRevision: { type: integer }
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/RevisionMeta' }
+                      pagination:
+                        type: object
+                        properties:
+                          limit: { type: integer }
+                          offset: { type: integer }
+                          total: { type: integer }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/v1/sections/{sectionId}/content/revisions/{revision}/restore:
+    post:
+      tags: [Revisions]
+      summary: Restore an older snapshot as a NEW current revision (content:restore)
+      parameters:
+        - $ref: '#/components/parameters/SectionId'
+        - { name: revision, in: path, required: true, schema: { type: integer, minimum: 1 } }
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expectedRevision]
+              properties:
+                expectedRevision: { type: integer, minimum: 1 }
+      responses:
+        '200': { $ref: '#/components/responses/ContentOk' }
+        '404': { description: CONTENT_NOT_FOUND or REVISION_NOT_FOUND, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/v1/internal/content/duplicate:
+    post:
+      tags: [Internal]
+      summary: Duplicate content into new target sections (trusted internal callers)
+      description: Authenticated with `X-Internal-Service-Token` (not a user JWT). Creates independent rows at revision 1.
+      security:
+        - internalToken: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/RequestId'
+        - { name: X-Actor-Id, in: header, required: false, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mappings]
+              properties:
+                mappings:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: object
+                    required: [sourceSectionId, targetSectionId]
+                    properties:
+                      sourceSectionId: { type: string }
+                      targetSectionId: { type: string }
+                      targetPageId: { type: string }
+      responses:
+        '201':
+          description: Created copies
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      count: { type: integer }
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/Content' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /health:
+    get:
+      tags: [Operations]
+      security: []
+      summary: Liveness
+      responses:
+        '200': { description: ok }
+  /ready:
+    get:
+      tags: [Operations]
+      security: []
+      summary: Readiness (PostgreSQL)
+      responses:
+        '200': { description: ready }
+        '503': { description: not_ready }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT, description: 'BRR/JWT. Claims: sub, workspaces[], permissions[] (content:read|edit|delete|restore|duplicate|*).' }
+    internalToken: { type: apiKey, in: header, name: X-Internal-Service-Token }
+  parameters:
+    SectionId: { name: sectionId, in: path, required: true, schema: { type: string, pattern: '^[1-9][0-9]{0,18}$' } }
+    WorkspaceId: { name: X-Workspace-Id, in: header, required: true, schema: { type: string, pattern: '^[1-9][0-9]{0,18}$' } }
+    RequestId: { name: X-Request-Id, in: header, required: false, schema: { type: string, maxLength: 64 } }
+  responses:
+    ContentOk:
+      description: Content record
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success: { type: boolean }
+              data: { $ref: '#/components/schemas/Content' }
+              meta: { $ref: '#/components/schemas/Meta' }
+    Error:
+      description: Error (stable codes - see README)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  schemas:
+    Meta:
+      type: object
+      properties:
+        requestId: { type: string }
+    ErrorEnvelope:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        error:
+          type: object
+          properties:
+            code: { type: string, example: CONTENT_REVISION_CONFLICT }
+            message: { type: string }
+            details: {}
+        meta: { $ref: '#/components/schemas/Meta' }
+    SectionType:
+      type: string
+      enum: [hero, features, images, testimonials, pricing, faq, cta, form]
+    Content:
+      type: object
+      properties:
+        id: { type: string }
+        pageId: { type: string }
+        sectionId: { type: string }
+        sectionType: { $ref: '#/components/schemas/SectionType' }
+        schemaVersion: { type: integer }
+        revision: { type: integer }
+        content: { type: object, description: Section-specific document validated by a strict schema }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CreateContent:
+      type: object
+      required: [pageId, sectionType, content]
+      additionalProperties: false
+      properties:
+        pageId: { type: string }
+        sectionType: { $ref: '#/components/schemas/SectionType' }
+        schemaVersion: { type: integer, enum: [1] }
+        content: { type: object }
+    MutateContent:
+      type: object
+      required: [expectedRevision, content]
+      additionalProperties: false
+      properties:
+        expectedRevision: { type: integer, minimum: 1 }
+        content: { type: object }
+    RevisionMeta:
+      type: object
+      properties:
+        id: { type: string }
+        contentId: { type: string }
+        sectionId: { type: string }
+        revision: { type: integer }
+        schemaVersion: { type: integer }
+        createdBy: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }

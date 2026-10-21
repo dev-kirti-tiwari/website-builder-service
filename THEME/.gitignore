@@ -1,0 +1,18 @@
+# secrets / environment
+.env
+.env.*
+!.env.example
+postman/*.local.postman_environment.json
+
+# dependencies & build output
+node_modules/
+npm-debug.log*
+
+# logs, coverage, OS/editor noise
+logs/
+*.log
+coverage/
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
